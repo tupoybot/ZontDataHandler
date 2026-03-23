@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">ZONT Watch Sync</string>
+    <string name="combined_provider_label">ZONT overview</string>
+    <string name="combined_legend_provider_label">ZONT overview + icons</string>
+    <string name="room_provider_label">ZONT room</string>
+    <string name="burner_provider_label">ZONT burner</string>
+    <string name="target_provider_label">ZONT setpoint</string>
+    <string name="coolant_provider_label">ZONT coolant</string>
+    <string name="target_coolant_provider_label">ZONT setpoint + coolant</string>
+    <string name="room_setpoint_provider_label">ZONT room + air setpoint</string>
+</resources>
