@@ -43,6 +43,14 @@
 - `ZONT setpoint + coolant`
 - `ZONT room + air setpoint`
 
+Для обычных больших слотов, которые открывают стандартный системный picker, сейчас пригодны:
+
+- `ZONT overview`
+- `ZONT setpoint + coolant`
+- `ZONT room + air setpoint`
+
+Эти providers публикуют `LONG_TEXT`, поэтому их можно ставить не только в верхний большой слот, но и в нижний большой слот на watch face, где это разрешено самим циферблатом.
+
 Подтверждённый маппинг реального `z3k-state` устройства сохраняется:
 
 - `roomTemperature` -> комнатная температура
@@ -96,9 +104,10 @@ APK после сборки:
 
 1. Проверить, что `Refresh` обновляет snapshot на телефоне без изменения подтверждённого маппинга метрик.
 2. Проверить, что данные доходят до `wear` после успешного refresh.
-3. Проверить исходные 7 providers на обычных текстовых слотах.
-4. Отдельно проверить `ZONT overview + icons` на image-compatible слотах или в picker preview и убедиться, что он не деградирует в буквенную легенду.
-5. Проверить placeholder/stale поведение, если refresh сломан или данные старые.
+3. Проверить исходные 8 providers на обычных текстовых слотах.
+4. Проверить `ZONT overview`, `ZONT setpoint + coolant` и `ZONT room + air setpoint` в обычном большом `LONG_TEXT`-слоте, включая нижний большой слот на совместимом watch face.
+5. Отдельно проверить `ZONT overview + icons` на image-compatible слотах или в picker preview и убедиться, что он не деградирует в буквенную легенду.
+6. Проверить placeholder/stale поведение, если refresh сломан или данные старые.
 
 Реальный путь тестирования:
 
@@ -108,3 +117,8 @@ APK после сборки:
 ## Samsung Note
 
 Для bounded Samsung-аудита `ZONT burner` теперь публикует не только `SHORT_TEXT`, но и `RANGED_VALUE`, что даёт безопасный эксперимент для gauge-like slots. Подробный следующий шаг вынесен в [docs/stage-05-plan.md](docs/stage-05-plan.md): там отдельно описаны исследование нужного `Galaxy Watch Ultra` slot и доотладка `ZONT overview + icons`, если конкретный watch face всё ещё сводит его к text-only fallback.
+
+Важно различать два сценария:
+
+- если новый циферблат даёт обычный большой нижний слот через стандартный picker, это не "Samsung-only" формат, и туда можно ставить наши `LONG_TEXT` providers;
+- если slot показывает только Samsung/system sources и не даёт выбрать сторонний provider, это уже private-ограничение конкретного stock face, как у `Ultra Analog`.

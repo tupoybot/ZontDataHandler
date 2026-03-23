@@ -87,13 +87,6 @@ abstract class BaseSnapshotComplicationService : SuspendingComplicationDataSourc
             ?: "Combined ZONT metrics unavailable"
 
         return when (type) {
-            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(
-                text = plainText(snapshot?.combinedLongText(currentEpochSeconds) ?: combinedLongPlaceholder),
-                contentDescription = plainText(description),
-            ).setSmallImage(overviewLegendSmallImage(snapshot, currentEpochSeconds))
-                .setMonochromaticImage(monochromaticImage(R.drawable.ic_complication_combined))
-                .build()
-
             ComplicationType.SMALL_IMAGE -> SmallImageComplicationData.Builder(
                 overviewLegendSmallImage(snapshot, currentEpochSeconds),
                 plainText(description),

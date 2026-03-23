@@ -90,6 +90,37 @@ Watch face сам определяет:
 
 ## Ограничения
 
+### Практически подтверждённое ограничение для `Ultra Analog`
+
+На реальном `Galaxy Watch Ultra` текущий stock face `com.samsung.android.watch.watchface.ultraanalog` использует собственную Samsung-конфигурацию слотов.
+
+В on-device asset-конфиге этого face (`UltraAnalogWatchFaceService_settings.xml` внутри APK с часов) для:
+
+- `complication-arc`;
+- `complication-left`;
+- `complication-right`;
+- `complication-bottom`;
+- edge-слотов
+
+опубликован жёстко заданный список `Selection` с `category_type=private` и заранее указанными `component_name` для Samsung/system providers.
+
+Практический вывод:
+
+- нужная верхняя дуга `complication-arc` существует как настраиваемый элемент face;
+- но для `Ultra Analog` она не ведёт в обычный системный picker сторонних providers;
+- сторонний provider вроде `com.botkin.zontdatahandler` туда штатно встроить нельзя без неподтверждённого proprietary workaround, который в проект добавлять не нужно.
+
+### Обычный большой нижний слот на другом watch face
+
+Если после смены циферблата внизу появляется большой слот и он открывает обычный системный picker, это уже не выглядит как special Samsung-only формат.
+
+Практический вывод для проекта:
+
+- такой слот можно использовать для наших задач как обычный `LONG_TEXT` complication slot;
+- в текущем приложении для него подходят как минимум `ZONT overview`, `ZONT setpoint + coolant` и `ZONT room + air setpoint`;
+- если picker показывает наши providers, значит слот открыт для сторонних data source и дополнительный "самсунговский" формат не нужен;
+- если picker снова ограничен только Samsung/system sources, это нужно трактовать как private-ограничение конкретного face, а не как проблему нашего provider'а.
+
 ### Если используется собственный watch face
 
 Тогда можно спроектировать слот под наши данные самостоятельно:
@@ -152,6 +183,8 @@ Watch face сам определяет:
 1. публиковать правильные `ComplicationType`
 2. корректно реализовать provider и manifest
 3. учитывать, что часть специальных слотов stock watch face может быть недоступна для сторонних providers вообще
+
+Отдельно: обычный большой нижний слот, который работает через стандартный picker и принимает `LONG_TEXT`, можно считать нормальным рабочим сценарием для наших providers, а не отдельным Samsung-specific кейсом.
 
 ## Короткая формулировка для backlog
 

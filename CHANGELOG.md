@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `ZONT overview + icons` теперь публикуется только для image-compatible слотов, чтобы не деградировать в text-only fallback на части watch face.
+- Обычные большие `LONG_TEXT`-слоты, включая нижний большой слот на совместимых watch face, теперь можно использовать не только для `ZONT overview`, но и для `ZONT setpoint + coolant` / `ZONT room + air setpoint`.
+- В документации отдельно разведены обычные большие слоты с системным picker'ом и private Samsung slots уровня `Ultra Analog`.
+
 ## 0.1 - 2026-03-23
 
 - Первая публичная версия приложения для отображения данных `ZONT Online` на Wear OS часах через complications и экран обзора на самих часах.
