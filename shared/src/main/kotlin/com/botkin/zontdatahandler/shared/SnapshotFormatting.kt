@@ -63,8 +63,7 @@ fun ZontSnapshot.isStale(nowEpochSeconds: Long): Boolean {
     if (updatedAtEpochSeconds <= 0L) {
         return true
     }
-    val thresholdSeconds = refreshIntervalMinutes
-        .coerceAtLeast(ZontSnapshot.MIN_REFRESH_INTERVAL_MINUTES) * 60L * 2L
+    val thresholdSeconds = refreshIntervalSeconds() * staleThresholdPeriods
     return nowEpochSeconds - updatedAtEpochSeconds >= thresholdSeconds
 }
 
@@ -74,10 +73,10 @@ fun ZontSnapshot.metricPresentation(
 ): MetricPresentation {
     val current = withComputedStaleness(nowEpochSeconds)
     val stale = current.isStale
-    val value = current.metricValue(metric)
+    val value = current.metricDisplayValue(metric, nowEpochSeconds)
     val title = metric.shortTitle
     val valueText = current.metricComplicationText(metric, nowEpochSeconds)
-    val visibleValue = current.metricValueText(metric)
+    val visibleValue = current.metricValueText(metric, nowEpochSeconds)
     val descriptionPrefix = buildString {
         if (stale) {
             append("Stale ")
@@ -95,29 +94,51 @@ fun ZontSnapshot.metricPresentation(
 
 fun ZontSnapshot.combinedLongText(nowEpochSeconds: Long): String {
     val current = withComputedStaleness(nowEpochSeconds)
+    val primaryHasValue = current.hasAnyMetricValue(combinedPrimaryMetrics, nowEpochSeconds)
+    val secondaryHasValue = current.hasAnyMetricValue(combinedSecondaryMetrics, nowEpochSeconds)
     val body = buildString {
-        append(current.combinedPrimaryLine())
+        append(
+            current.withInlineStaleMarker(
+                text = current.combinedPrimaryLine(nowEpochSeconds),
+                isPlaceholder = !primaryHasValue,
+            ),
+        )
         append('\n')
-        append(current.combinedSecondaryLine())
+        append(
+            current.withInlineStaleMarker(
+                text = current.combinedSecondaryLine(nowEpochSeconds),
+                isPlaceholder = !secondaryHasValue,
+                forceMarker = !primaryHasValue && secondaryHasValue,
+            ),
+        )
     }
-    return current.withLeadingStaleMarker(body)
+    return body
 }
 
 fun ZontSnapshot.combinedShortText(nowEpochSeconds: Long): String {
     val current = withComputedStaleness(nowEpochSeconds)
-    val body = current.combinedPrimaryLine()
-    return current.withInlineStaleMarker(body)
+    val body = current.combinedPrimaryLine(nowEpochSeconds)
+    return current.withInlineStaleMarker(
+        text = body,
+        isPlaceholder = !current.hasAnyMetricValue(combinedPrimaryMetrics, nowEpochSeconds),
+    )
 }
 
 fun ZontSnapshot.combinedShortTitle(nowEpochSeconds: Long): String {
     val current = withComputedStaleness(nowEpochSeconds)
-    return current.combinedSecondaryLine()
+    val primaryHasValue = current.hasAnyMetricValue(combinedPrimaryMetrics, nowEpochSeconds)
+    val secondaryHasValue = current.hasAnyMetricValue(combinedSecondaryMetrics, nowEpochSeconds)
+    return current.withInlineStaleMarker(
+        text = current.combinedSecondaryLine(nowEpochSeconds),
+        isPlaceholder = !secondaryHasValue,
+        forceMarker = !primaryHasValue && secondaryHasValue,
+    )
 }
 
 fun ZontSnapshot.combinedContentDescription(nowEpochSeconds: Long): String {
     val current = withComputedStaleness(nowEpochSeconds)
     val body = complicationMetrics.joinToString(", ") { metric ->
-        "${metric.longTitle}: ${current.metricValueText(metric)}"
+        "${metric.longTitle}: ${current.metricValueText(metric, nowEpochSeconds)}"
     }
     return if (current.isStale) "Stale. $body" else body
 }
@@ -127,7 +148,10 @@ fun ZontSnapshot.metricComplicationText(
     nowEpochSeconds: Long,
 ): String {
     val current = withComputedStaleness(nowEpochSeconds)
-    return current.withInlineStaleMarker(current.metricValueText(metric), current.metricValue(metric) == null)
+    return current.withInlineStaleMarker(
+        text = current.metricValueText(metric, nowEpochSeconds),
+        isPlaceholder = current.metricDisplayValue(metric, nowEpochSeconds) == null,
+    )
 }
 
 fun ZontSnapshot.metricComplicationContentDescription(
@@ -135,7 +159,7 @@ fun ZontSnapshot.metricComplicationContentDescription(
     nowEpochSeconds: Long,
 ): String {
     val current = withComputedStaleness(nowEpochSeconds)
-    val body = "${metric.longTitle}: ${current.metricValueText(metric)}"
+    val body = "${metric.longTitle}: ${current.metricValueText(metric, nowEpochSeconds)}"
     return if (current.isStale) "Stale. $body" else body
 }
 
@@ -145,20 +169,20 @@ fun ZontSnapshot.metricPairPresentation(
     nowEpochSeconds: Long,
 ): MetricPairPresentation {
     val current = withComputedStaleness(nowEpochSeconds)
-    val primaryValue = current.metricValue(primaryMetric)
-    val secondaryValue = current.metricValue(secondaryMetric)
+    val primaryValue = current.metricDisplayValue(primaryMetric, nowEpochSeconds)
+    val secondaryValue = current.metricDisplayValue(secondaryMetric, nowEpochSeconds)
     val primaryText = current.withInlineStaleMarker(
-        text = current.metricValueText(primaryMetric),
+        text = current.metricValueText(primaryMetric, nowEpochSeconds),
         isPlaceholder = primaryValue == null,
     )
     val secondaryText = current.withInlineStaleMarker(
-        text = "${pairSecondaryPrefix}${current.metricValueText(secondaryMetric)}",
+        text = "${pairSecondaryPrefix}${current.metricValueText(secondaryMetric, nowEpochSeconds)}",
         isPlaceholder = secondaryValue == null,
-        forceMarker = primaryValue == null,
+        forceMarker = primaryValue == null && secondaryValue != null,
     )
     val body = listOf(
-        "${primaryMetric.longTitle}: ${current.metricValueText(primaryMetric)}",
-        "${secondaryMetric.longTitle}: ${current.metricValueText(secondaryMetric)}",
+        "${primaryMetric.longTitle}: ${current.metricValueText(primaryMetric, nowEpochSeconds)}",
+        "${secondaryMetric.longTitle}: ${current.metricValueText(secondaryMetric, nowEpochSeconds)}",
     ).joinToString(", ")
     return MetricPairPresentation(
         primaryText = primaryText,
@@ -177,12 +201,43 @@ private fun ZontSnapshot.metricValue(metric: SnapshotMetric): Double? {
     }
 }
 
-private fun ZontSnapshot.metricValueText(metric: SnapshotMetric): String {
-    return metricValue(metric)?.let { formatMetric(metric, it) } ?: SnapshotTransport.missingPlaceholder
+private fun ZontSnapshot.metricDisplayValue(
+    metric: SnapshotMetric,
+    nowEpochSeconds: Long,
+): Double? {
+    val value = metricValue(metric) ?: return null
+    return if (isMetricValueExpired(nowEpochSeconds)) null else value
 }
 
-private fun ZontSnapshot.withLeadingStaleMarker(text: String): String {
-    return if (isStale) "$staleMarker $text" else text
+private fun ZontSnapshot.metricValueText(
+    metric: SnapshotMetric,
+    nowEpochSeconds: Long,
+): String {
+    return metricDisplayValue(metric, nowEpochSeconds)?.let { formatMetric(metric, it) }
+        ?: SnapshotTransport.missingPlaceholder
+}
+
+private fun ZontSnapshot.hasAnyMetricValue(
+    metrics: List<SnapshotMetric>,
+    nowEpochSeconds: Long,
+): Boolean {
+    return metrics.any { metricDisplayValue(it, nowEpochSeconds) != null }
+}
+
+private fun ZontSnapshot.isMetricValueExpired(nowEpochSeconds: Long): Boolean {
+    if (updatedAtEpochSeconds <= 0L) {
+        return true
+    }
+    return nowEpochSeconds - updatedAtEpochSeconds >= metricValueExpirationThresholdSeconds()
+}
+
+private fun ZontSnapshot.metricValueExpirationThresholdSeconds(): Long {
+    return refreshIntervalSeconds() * metricValueExpirationPeriods
+}
+
+private fun ZontSnapshot.refreshIntervalSeconds(): Long {
+    return refreshIntervalMinutes
+        .coerceAtLeast(ZontSnapshot.MIN_REFRESH_INTERVAL_MINUTES) * 60L
 }
 
 private fun ZontSnapshot.withInlineStaleMarker(
@@ -193,15 +248,15 @@ private fun ZontSnapshot.withInlineStaleMarker(
     return if (isStale && (!isPlaceholder || forceMarker)) "$staleMarker$text" else text
 }
 
-private fun ZontSnapshot.combinedPrimaryLine(): String {
+private fun ZontSnapshot.combinedPrimaryLine(nowEpochSeconds: Long): String {
     return combinedPrimaryMetrics.joinToString(shortSeparator) { metric ->
-        metricValueText(metric)
+        metricValueText(metric, nowEpochSeconds)
     }
 }
 
-private fun ZontSnapshot.combinedSecondaryLine(): String {
+private fun ZontSnapshot.combinedSecondaryLine(nowEpochSeconds: Long): String {
     return combinedSecondaryMetrics.joinToString(shortSeparator) { metric ->
-        metricValueText(metric)
+        metricValueText(metric, nowEpochSeconds)
     }
 }
 
@@ -240,6 +295,8 @@ private val combinedSecondaryMetrics = listOf(
     SnapshotMetric.COOLANT_TEMPERATURE,
 )
 
+private const val staleThresholdPeriods = 2L
+private const val metricValueExpirationPeriods = 10L
 private const val staleMarker = "!"
 private const val pairSecondaryPrefix = "→"
 private const val shortSeparator = "·"

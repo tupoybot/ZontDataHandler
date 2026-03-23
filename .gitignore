@@ -10,6 +10,7 @@
 **/build/
 **/captures/
 **/.cxx/
+/shared/bin/
 
 /.kotlin/
 .DS_Store
