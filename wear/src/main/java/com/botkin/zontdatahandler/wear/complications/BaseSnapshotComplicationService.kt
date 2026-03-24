@@ -7,16 +7,15 @@ import androidx.wear.watchface.complications.data.ComplicationText
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.LongTextComplicationData
 import androidx.wear.watchface.complications.data.MonochromaticImage
-import androidx.wear.watchface.complications.data.PhotoImageComplicationData
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
-import androidx.wear.watchface.complications.data.SmallImage
-import androidx.wear.watchface.complications.data.SmallImageComplicationData
-import androidx.wear.watchface.complications.data.SmallImageType
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
 import com.botkin.zontdatahandler.shared.SnapshotMetric
+import com.botkin.zontdatahandler.shared.combinedColorLongText
+import com.botkin.zontdatahandler.shared.combinedColorShortText
+import com.botkin.zontdatahandler.shared.combinedColorShortTitle
 import com.botkin.zontdatahandler.shared.combinedContentDescription
 import com.botkin.zontdatahandler.shared.combinedLongText
 import com.botkin.zontdatahandler.shared.combinedShortText
@@ -31,7 +30,6 @@ import com.botkin.zontdatahandler.wear.data.WearSnapshotStore
 
 abstract class BaseSnapshotComplicationService : SuspendingComplicationDataSourceService() {
     private val snapshotStore by lazy { WearSnapshotStore(this) }
-    private val overviewLegendImageRenderer by lazy { OverviewLegendImageRenderer(this) }
 
     override suspend fun onComplicationRequest(
         request: ComplicationRequest,
@@ -52,12 +50,10 @@ abstract class BaseSnapshotComplicationService : SuspendingComplicationDataSourc
     protected fun buildCombinedData(
         snapshot: ZontSnapshot?,
         type: ComplicationType,
-        @DrawableRes iconResId: Int = R.drawable.ic_complication_combined,
     ): ComplicationData? {
-        val icon = monochromaticImage(iconResId)
         val longText = snapshot?.combinedLongText(currentEpochSeconds()) ?: combinedLongPlaceholder
-        val shortText = snapshot?.combinedShortText(currentEpochSeconds()) ?: shortPairPlaceholder
-        val shortTitle = snapshot?.combinedShortTitle(currentEpochSeconds()) ?: shortPairPlaceholder
+        val shortText = snapshot?.combinedShortText(currentEpochSeconds()) ?: combinedPrimaryPlaceholder
+        val shortTitle = snapshot?.combinedShortTitle(currentEpochSeconds()) ?: combinedSecondaryPlaceholder
         val description = snapshot?.combinedContentDescription(currentEpochSeconds())
             ?: "Combined ZONT metrics unavailable"
 
@@ -65,37 +61,39 @@ abstract class BaseSnapshotComplicationService : SuspendingComplicationDataSourc
             ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(
                 text = plainText(longText),
                 contentDescription = plainText(description),
-            ).setMonochromaticImage(icon).build()
+            ).build()
 
             ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(
                 text = plainText(shortText),
                 contentDescription = plainText(description),
-            ).setMonochromaticImage(icon)
-                .setTitle(plainText(shortTitle))
+            ).setTitle(plainText(shortTitle))
                 .build()
 
             else -> null
         }
     }
 
-    protected fun buildCombinedLegendData(
+    protected fun buildCombinedColorData(
         snapshot: ZontSnapshot?,
         type: ComplicationType,
     ): ComplicationData? {
-        val currentEpochSeconds = currentEpochSeconds()
-        val description = snapshot?.combinedContentDescription(currentEpochSeconds)
+        val longText = snapshot?.combinedColorLongText(currentEpochSeconds()) ?: colorCombinedLongPlaceholder
+        val shortText = snapshot?.combinedColorShortText(currentEpochSeconds()) ?: colorCombinedPrimaryPlaceholder
+        val shortTitle = snapshot?.combinedColorShortTitle(currentEpochSeconds()) ?: colorCombinedSecondaryPlaceholder
+        val description = snapshot?.combinedContentDescription(currentEpochSeconds())
             ?: "Combined ZONT metrics unavailable"
 
         return when (type) {
-            ComplicationType.SMALL_IMAGE -> SmallImageComplicationData.Builder(
-                overviewLegendSmallImage(snapshot, currentEpochSeconds),
-                plainText(description),
+            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(
+                text = plainText(longText),
+                contentDescription = plainText(description),
             ).build()
 
-            ComplicationType.PHOTO_IMAGE -> PhotoImageComplicationData.Builder(
-                overviewLegendBitmapIcon(snapshot, currentEpochSeconds),
-                plainText(description),
-            ).build()
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(
+                text = plainText(shortText),
+                contentDescription = plainText(description),
+            ).setTitle(plainText(shortTitle))
+                .build()
 
             else -> null
         }
@@ -221,23 +219,6 @@ abstract class BaseSnapshotComplicationService : SuspendingComplicationDataSourc
         return PlainComplicationText.Builder(text).build()
     }
 
-    private fun overviewLegendBitmapIcon(
-        snapshot: ZontSnapshot?,
-        nowEpochSeconds: Long,
-    ): Icon {
-        return Icon.createWithBitmap(overviewLegendImageRenderer.render(snapshot, nowEpochSeconds))
-    }
-
-    private fun overviewLegendSmallImage(
-        snapshot: ZontSnapshot?,
-        nowEpochSeconds: Long,
-    ): SmallImage {
-        val icon = overviewLegendBitmapIcon(snapshot, nowEpochSeconds)
-        return SmallImage.Builder(icon, SmallImageType.PHOTO)
-            .setAmbientImage(icon)
-            .build()
-    }
-
     private fun ZontSnapshot.metricValue(metric: SnapshotMetric): Double? {
         return when (metric) {
             SnapshotMetric.ROOM_TEMPERATURE -> roomTemperature
@@ -259,8 +240,12 @@ abstract class BaseSnapshotComplicationService : SuspendingComplicationDataSourc
 
     private companion object {
         const val placeholderText = "--"
-        const val shortPairPlaceholder = "--·--"
-        const val combinedLongPlaceholder = "--·--\n--·--"
+        const val combinedPrimaryPlaceholder = "-- --"
+        const val combinedSecondaryPlaceholder = "-- \u2192 --"
+        const val combinedLongPlaceholder = "$combinedPrimaryPlaceholder $combinedSecondaryPlaceholder"
+        const val colorCombinedPrimaryPlaceholder = "\uD83C\uDFE0 -- \uD83D\uDD25 --"
+        const val colorCombinedSecondaryPlaceholder = "\uD83C\uDF21\uFE0F -- \u2668\uFE0F --"
+        const val colorCombinedLongPlaceholder = "$colorCombinedPrimaryPlaceholder\n$colorCombinedSecondaryPlaceholder"
 
         val previewSnapshot = ZontSnapshot(
             roomTemperature = 21.5,

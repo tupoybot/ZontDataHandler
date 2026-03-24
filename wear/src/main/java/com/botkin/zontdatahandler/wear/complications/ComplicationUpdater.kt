@@ -7,7 +7,7 @@ import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUp
 object ComplicationUpdater {
     private val providerClasses = listOf(
         CombinedComplicationService::class.java,
-        CombinedLegendComplicationService::class.java,
+        CombinedColorComplicationService::class.java,
         RoomTemperatureComplicationService::class.java,
         BurnerModulationComplicationService::class.java,
         TargetTemperatureComplicationService::class.java,

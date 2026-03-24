@@ -11,16 +11,16 @@ class CombinedComplicationService : BaseSnapshotComplicationService() {
         snapshot: ZontSnapshot?,
         type: ComplicationType,
     ): ComplicationData? {
-        return buildCombinedData(snapshot, type, R.drawable.ic_complication_combined)
+        return buildCombinedData(snapshot, type)
     }
 }
 
-class CombinedLegendComplicationService : BaseSnapshotComplicationService() {
+class CombinedColorComplicationService : BaseSnapshotComplicationService() {
     override fun buildComplicationData(
         snapshot: ZontSnapshot?,
         type: ComplicationType,
     ): ComplicationData? {
-        return buildCombinedLegendData(snapshot, type)
+        return buildCombinedColorData(snapshot, type)
     }
 }
 

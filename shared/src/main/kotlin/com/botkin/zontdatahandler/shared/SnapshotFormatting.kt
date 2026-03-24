@@ -7,12 +7,39 @@ import java.util.Locale
 enum class SnapshotMetric(
     val shortTitle: String,
     val longTitle: String,
+    val compactLabel: String,
+    val colorLabel: String,
 ) {
-    ROOM_TEMPERATURE(shortTitle = "Room", longTitle = "Room temperature"),
-    ROOM_SETPOINT_TEMPERATURE(shortTitle = "Air setpoint", longTitle = "Room air setpoint"),
-    BURNER_MODULATION(shortTitle = "Burner", longTitle = "Burner modulation"),
-    TARGET_TEMPERATURE(shortTitle = "Setpoint", longTitle = "Water setpoint"),
-    COOLANT_TEMPERATURE(shortTitle = "Coolant", longTitle = "Coolant temperature"),
+    ROOM_TEMPERATURE(
+        shortTitle = "Room",
+        longTitle = "Room temperature",
+        compactLabel = "\uD83C\uDF21\uFE0E",
+        colorLabel = "\uD83C\uDFE0",
+    ),
+    ROOM_SETPOINT_TEMPERATURE(
+        shortTitle = "Air setpoint",
+        longTitle = "Room air setpoint",
+        compactLabel = "\uD83C\uDF21\uFE0E",
+        colorLabel = "\uD83C\uDF21\uFE0F",
+    ),
+    BURNER_MODULATION(
+        shortTitle = "Burner",
+        longTitle = "Burner modulation",
+        compactLabel = "\uD83D\uDD25\uFE0E",
+        colorLabel = "\uD83D\uDD25",
+    ),
+    TARGET_TEMPERATURE(
+        shortTitle = "Setpoint",
+        longTitle = "Water setpoint",
+        compactLabel = "\uD83C\uDF21\uFE0E",
+        colorLabel = "\uD83C\uDF21\uFE0F",
+    ),
+    COOLANT_TEMPERATURE(
+        shortTitle = "Coolant",
+        longTitle = "Coolant temperature",
+        compactLabel = "\u25A5",
+        colorLabel = "\u2668\uFE0F",
+    ),
 }
 
 data class MetricPresentation(
@@ -96,14 +123,14 @@ fun ZontSnapshot.combinedLongText(nowEpochSeconds: Long): String {
     val current = withComputedStaleness(nowEpochSeconds)
     val primaryHasValue = current.hasAnyMetricValue(combinedPrimaryMetrics, nowEpochSeconds)
     val secondaryHasValue = current.hasAnyMetricValue(combinedSecondaryMetrics, nowEpochSeconds)
-    val body = buildString {
+    return buildString {
         append(
             current.withInlineStaleMarker(
                 text = current.combinedPrimaryLine(nowEpochSeconds),
                 isPlaceholder = !primaryHasValue,
             ),
         )
-        append('\n')
+        append(overviewSegmentSeparator)
         append(
             current.withInlineStaleMarker(
                 text = current.combinedSecondaryLine(nowEpochSeconds),
@@ -112,7 +139,6 @@ fun ZontSnapshot.combinedLongText(nowEpochSeconds: Long): String {
             ),
         )
     }
-    return body
 }
 
 fun ZontSnapshot.combinedShortText(nowEpochSeconds: Long): String {
@@ -130,6 +156,47 @@ fun ZontSnapshot.combinedShortTitle(nowEpochSeconds: Long): String {
     val secondaryHasValue = current.hasAnyMetricValue(combinedSecondaryMetrics, nowEpochSeconds)
     return current.withInlineStaleMarker(
         text = current.combinedSecondaryLine(nowEpochSeconds),
+        isPlaceholder = !secondaryHasValue,
+        forceMarker = !primaryHasValue && secondaryHasValue,
+    )
+}
+
+fun ZontSnapshot.combinedColorLongText(nowEpochSeconds: Long): String {
+    val current = withComputedStaleness(nowEpochSeconds)
+    val primaryHasValue = current.hasAnyMetricValue(combinedPrimaryMetrics, nowEpochSeconds)
+    val secondaryHasValue = current.hasAnyMetricValue(combinedSecondaryMetrics, nowEpochSeconds)
+    return buildString {
+        append(
+            current.withInlineStaleMarker(
+                text = current.combinedColorPrimaryLine(nowEpochSeconds),
+                isPlaceholder = !primaryHasValue,
+            ),
+        )
+        append('\n')
+        append(
+            current.withInlineStaleMarker(
+                text = current.combinedColorSecondaryLine(nowEpochSeconds),
+                isPlaceholder = !secondaryHasValue,
+                forceMarker = !primaryHasValue && secondaryHasValue,
+            ),
+        )
+    }
+}
+
+fun ZontSnapshot.combinedColorShortText(nowEpochSeconds: Long): String {
+    val current = withComputedStaleness(nowEpochSeconds)
+    return current.withInlineStaleMarker(
+        text = current.combinedColorPrimaryLine(nowEpochSeconds),
+        isPlaceholder = !current.hasAnyMetricValue(combinedPrimaryMetrics, nowEpochSeconds),
+    )
+}
+
+fun ZontSnapshot.combinedColorShortTitle(nowEpochSeconds: Long): String {
+    val current = withComputedStaleness(nowEpochSeconds)
+    val primaryHasValue = current.hasAnyMetricValue(combinedPrimaryMetrics, nowEpochSeconds)
+    val secondaryHasValue = current.hasAnyMetricValue(combinedSecondaryMetrics, nowEpochSeconds)
+    return current.withInlineStaleMarker(
+        text = current.combinedColorSecondaryLine(nowEpochSeconds),
         isPlaceholder = !secondaryHasValue,
         forceMarker = !primaryHasValue && secondaryHasValue,
     )
@@ -176,7 +243,7 @@ fun ZontSnapshot.metricPairPresentation(
         isPlaceholder = primaryValue == null,
     )
     val secondaryText = current.withInlineStaleMarker(
-        text = "${pairSecondaryPrefix}${current.metricValueText(secondaryMetric, nowEpochSeconds)}",
+        text = "$pairSecondaryPrefix${current.metricValueText(secondaryMetric, nowEpochSeconds)}",
         isPlaceholder = secondaryValue == null,
         forceMarker = primaryValue == null && secondaryValue != null,
     )
@@ -249,14 +316,76 @@ private fun ZontSnapshot.withInlineStaleMarker(
 }
 
 private fun ZontSnapshot.combinedPrimaryLine(nowEpochSeconds: Long): String {
-    return combinedPrimaryMetrics.joinToString(shortSeparator) { metric ->
-        metricValueText(metric, nowEpochSeconds)
-    }
+    return metricLine(
+        primaryMetric = SnapshotMetric.ROOM_TEMPERATURE,
+        secondaryMetric = SnapshotMetric.BURNER_MODULATION,
+        nowEpochSeconds = nowEpochSeconds,
+        separator = overviewInlineSeparator,
+    )
 }
 
 private fun ZontSnapshot.combinedSecondaryLine(nowEpochSeconds: Long): String {
-    return combinedSecondaryMetrics.joinToString(shortSeparator) { metric ->
-        metricValueText(metric, nowEpochSeconds)
+    return directionalMetricLine(
+        primaryMetric = SnapshotMetric.COOLANT_TEMPERATURE,
+        secondaryMetric = SnapshotMetric.TARGET_TEMPERATURE,
+        nowEpochSeconds = nowEpochSeconds,
+    )
+}
+
+private fun ZontSnapshot.combinedColorPrimaryLine(nowEpochSeconds: Long): String {
+    return colorMetricLine(
+        primaryMetric = SnapshotMetric.ROOM_TEMPERATURE,
+        secondaryMetric = SnapshotMetric.BURNER_MODULATION,
+        nowEpochSeconds = nowEpochSeconds,
+    )
+}
+
+private fun ZontSnapshot.combinedColorSecondaryLine(nowEpochSeconds: Long): String {
+    return colorMetricLine(
+        primaryMetric = SnapshotMetric.TARGET_TEMPERATURE,
+        secondaryMetric = SnapshotMetric.COOLANT_TEMPERATURE,
+        nowEpochSeconds = nowEpochSeconds,
+    )
+}
+
+private fun ZontSnapshot.metricLine(
+    primaryMetric: SnapshotMetric,
+    secondaryMetric: SnapshotMetric,
+    nowEpochSeconds: Long,
+    separator: String,
+): String {
+    return buildString {
+        append(metricValueText(primaryMetric, nowEpochSeconds))
+        append(separator)
+        append(metricValueText(secondaryMetric, nowEpochSeconds))
+    }
+}
+
+private fun ZontSnapshot.directionalMetricLine(
+    primaryMetric: SnapshotMetric,
+    secondaryMetric: SnapshotMetric,
+    nowEpochSeconds: Long,
+): String {
+    return buildString {
+        append(metricValueText(primaryMetric, nowEpochSeconds))
+        append(pairInlineSeparator)
+        append(metricValueText(secondaryMetric, nowEpochSeconds))
+    }
+}
+
+private fun ZontSnapshot.colorMetricLine(
+    primaryMetric: SnapshotMetric,
+    secondaryMetric: SnapshotMetric,
+    nowEpochSeconds: Long,
+): String {
+    return buildString {
+        append(primaryMetric.colorLabel)
+        append(' ')
+        append(metricValueText(primaryMetric, nowEpochSeconds))
+        append(' ')
+        append(secondaryMetric.colorLabel)
+        append(' ')
+        append(metricValueText(secondaryMetric, nowEpochSeconds))
     }
 }
 
@@ -299,4 +428,6 @@ private const val staleThresholdPeriods = 2L
 private const val metricValueExpirationPeriods = 10L
 private const val staleMarker = "!"
 private const val pairSecondaryPrefix = "→"
-private const val shortSeparator = "·"
+private const val overviewInlineSeparator = " "
+private const val overviewSegmentSeparator = " "
+private const val pairInlineSeparator = " → "

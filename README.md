@@ -36,7 +36,7 @@
 Текущие providers:
 
 - `ZONT overview`
-- `ZONT overview + icons`
+- `ZONT color overview`
 - `ZONT room`
 - `ZONT burner`
 - `ZONT setpoint`
@@ -44,9 +44,21 @@
 - `ZONT setpoint + coolant`
 - `ZONT room + air setpoint`
 
+Текущая Wear OS API-ветка проекта не поддерживает честные inline drawable-пиктограммы внутри `ComplicationText`, поэтому `ZONT overview` и paired `LONG_TEXT` providers остаются text-first.
+
+- `ZONT overview` больше не использует noisy leading icon и не навязывает ручной перенос строки: provider отдаёт одну плоскую строку, а конкретный watch face renderer сам решает, где её переложить.
+- paired providers сохраняют свои monochromatic pictogram resources там, где renderer их показывает, и явную стрелочку `→` между текущим и целевым значением, чтобы layout оставался понятным даже на face, который скрывает leading icon.
+
+`ZONT color overview` — отдельный emoji-first provider для color-capable renderers. Он не заменяет обычный `ZONT overview`: это осознанный спец-вариант для тех face/slots, где цветные emoji действительно выглядят уместно.
+
+Inline `Material Symbols` для такого текста здесь не подходят: `ComplicationText` не даёт выбрать или встроить нужный font renderer watch face, поэтому имена вроде `whatshot` / `device_thermostat` нельзя надёжно использовать как inline symbols. Для монохромного пути остаются обычные Unicode text glyphs, а `Material Symbols` в проекте реалистично использовать только как наши собственные drawable/vector resources вне inline-текста.
+
+Важно для обновления существующей установки: provider `ZONT overview + icons` удалён из manifest и codebase. Если какой-то slot раньше был привязан именно к нему, после обновления его нужно будет переназначить через системный picker; это не silent fallback, а честное исчезновение удалённого data source.
+
 Для обычных больших слотов, которые открывают стандартный системный picker, сейчас пригодны:
 
 - `ZONT overview`
+- `ZONT color overview`
 - `ZONT setpoint + coolant`
 - `ZONT room + air setpoint`
 
@@ -153,11 +165,12 @@ GitHub secrets нужно заводить так:
 1. Проверить, что `Refresh` обновляет snapshot на телефоне без изменения подтверждённого маппинга метрик.
 2. Проверить, что данные доходят до `wear` после успешного refresh.
 3. Проверить, что телефон и часы показывают ожидаемый установленный version/build.
-4. Проверить исходные 8 providers на обычных текстовых слотах.
-5. Проверить `ZONT overview`, `ZONT setpoint + coolant` и `ZONT room + air setpoint` в обычном большом `LONG_TEXT`-слоте, включая нижний большой слот на совместимом watch face.
-6. Отдельно проверить `ZONT overview + icons` на image-compatible слотах или в picker preview и убедиться, что он не деградирует в буквенную легенду.
-7. Проверить placeholder/stale поведение, если refresh сломан или данные старые.
-8. Проверить release APK path отдельно:
+4. Проверить текущие 8 providers на обычных текстовых слотах.
+5. Проверить `ZONT overview`, `ZONT color overview`, `ZONT setpoint + coolant` и `ZONT room + air setpoint` в обычном большом `LONG_TEXT`-слоте, включая нижний большой слот на совместимом watch face; `overview` должен оставаться читаемым и без ручного `\n`, а paired-подача должна оставаться понятной и в варианте с иконкой, и на renderer, который её скрывает.
+6. Для `ZONT color overview` отдельно проверить, не делает ли конкретный renderer emoji слишком шумными, цветными или typographically uneven по сравнению с обычным `ZONT overview`.
+7. Если slot раньше использовал удалённый `ZONT overview + icons`, убедиться, что после обновления он честно требует повторного выбора provider, а не притворяется рабочим.
+8. Проверить placeholder/stale поведение, если refresh сломан или данные старые.
+9. Проверить release APK path отдельно:
    debug поверх debug должен обновляться;
    unsigned release не должен называться "готовым install/update path";
    signed release-over-release возможен только при одной и той же приватной подписи.
@@ -165,13 +178,12 @@ GitHub secrets нужно заводить так:
 Реальный путь тестирования:
 
 - Android emulator + Wear OS emulator для быстрой регрессии;
-- Galaxy S23+ + Galaxy Watch Ultra для финальной ручной проверки sideload-сценария.
+- Galaxy S23+ + Galaxy Watch Ultra для финальной ручной проверки sideload-сценария и сравнения live-render paired/overview с эмулятором.
 
 ## Samsung Note
 
-Для bounded Samsung-аудита `ZONT burner` теперь публикует не только `SHORT_TEXT`, но и `RANGED_VALUE`, что даёт безопасный эксперимент для gauge-like slots. Подробный следующий шаг вынесен в [docs/stage-05-plan.md](docs/stage-05-plan.md): там отдельно описаны исследование нужного `Galaxy Watch Ultra` slot и доотладка `ZONT overview + icons`, если конкретный watch face всё ещё сводит его к text-only fallback.
+Samsung-specific эксперимент для специальных зон `Galaxy Watch Ultra` / `Ultra Analog` уже проводился и завершился отрицательным результатом.
 
-Важно различать два сценария:
-
-- если новый циферблат даёт обычный большой нижний слот через стандартный picker, это не "Samsung-only" формат, и туда можно ставить наши `LONG_TEXT` providers;
-- если slot показывает только Samsung/system sources и не даёт выбрать сторонний provider, это уже private-ограничение конкретного stock face, как у `Ultra Analog`.
+- специальные части stock Samsung Ultra-циферблатов считаются private-слотами и зарезервированы Samsung/system providers;
+- сторонний provider вроде `com.botkin.zontdatahandler` туда штатно встроить нельзя;
+- обычные слоты, которые открывают стандартный системный picker, остаются нормальным и поддерживаемым сценарием для наших providers.

@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">ZONT Watch Sync</string>
     <string name="combined_provider_label">ZONT overview</string>
-    <string name="combined_legend_provider_label">ZONT overview + icons</string>
+    <string name="combined_color_provider_label">ZONT color overview</string>
     <string name="room_provider_label">ZONT room</string>
     <string name="burner_provider_label">ZONT burner</string>
     <string name="target_provider_label">ZONT setpoint</string>

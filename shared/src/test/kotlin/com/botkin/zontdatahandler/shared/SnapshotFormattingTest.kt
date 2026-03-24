@@ -79,6 +79,24 @@ class SnapshotFormattingTest {
     }
 
     @Test
+    fun `setpoint coolant pair uses unicode marker for secondary value`() {
+        val snapshot = staleSnapshot(
+            targetTemperature = 22.0,
+            updatedAtEpochSeconds = nowEpochSeconds - 180L,
+            refreshIntervalMinutes = 1,
+        )
+
+        val presentation = snapshot.metricPairPresentation(
+            primaryMetric = SnapshotMetric.COOLANT_TEMPERATURE,
+            secondaryMetric = SnapshotMetric.TARGET_TEMPERATURE,
+            nowEpochSeconds = nowEpochSeconds,
+        )
+
+        assertEquals("--", presentation.primaryText)
+        assertEquals("!→22°", presentation.secondaryText)
+    }
+
+    @Test
     fun `combined long text marks the first non-placeholder line before expiration threshold`() {
         val snapshot = staleSnapshot(
             targetTemperature = 22.0,
@@ -87,7 +105,7 @@ class SnapshotFormattingTest {
             refreshIntervalMinutes = 1,
         )
 
-        assertEquals("--·--\n!22°·37°", snapshot.combinedLongText(nowEpochSeconds))
+        assertEquals("-- -- !37° → 22°", snapshot.combinedLongText(nowEpochSeconds))
     }
 
     @Test
@@ -99,8 +117,8 @@ class SnapshotFormattingTest {
             refreshIntervalMinutes = 1,
         )
 
-        assertEquals("--·--", snapshot.combinedShortText(nowEpochSeconds))
-        assertEquals("!22°·37°", snapshot.combinedShortTitle(nowEpochSeconds))
+        assertEquals("-- --", snapshot.combinedShortText(nowEpochSeconds))
+        assertEquals("!37° → 22°", snapshot.combinedShortTitle(nowEpochSeconds))
     }
 
     @Test
@@ -114,10 +132,36 @@ class SnapshotFormattingTest {
             refreshIntervalMinutes = 1,
         )
 
-        assertEquals("--·--\n--·--", snapshot.combinedLongText(nowEpochSeconds))
-        assertEquals("--·--", snapshot.combinedShortText(nowEpochSeconds))
-        assertEquals("--·--", snapshot.combinedShortTitle(nowEpochSeconds))
+        assertEquals("-- -- -- → --", snapshot.combinedLongText(nowEpochSeconds))
+        assertEquals("-- --", snapshot.combinedShortText(nowEpochSeconds))
+        assertEquals("-- → --", snapshot.combinedShortTitle(nowEpochSeconds))
     }
+
+    @Test
+    fun `color combined long text shows emoji markers for all values`() {
+        val snapshot = staleSnapshot(
+            targetTemperature = 22.0,
+            coolantTemperature = 37.0,
+            updatedAtEpochSeconds = nowEpochSeconds - 180L,
+            refreshIntervalMinutes = 1,
+        )
+
+        assertEquals("🏠 -- 🔥 --\n!🌡️ 22° ♨️ 37°", snapshot.combinedColorLongText(nowEpochSeconds))
+    }
+
+    @Test
+    fun `color combined short presentation preserves emoji markers and stale marker placement`() {
+        val snapshot = staleSnapshot(
+            targetTemperature = 22.0,
+            coolantTemperature = 37.0,
+            updatedAtEpochSeconds = nowEpochSeconds - 180L,
+            refreshIntervalMinutes = 1,
+        )
+
+        assertEquals("🏠 -- 🔥 --", snapshot.combinedColorShortText(nowEpochSeconds))
+        assertEquals("!🌡️ 22° ♨️ 37°", snapshot.combinedColorShortTitle(nowEpochSeconds))
+    }
+
 
     private fun staleSnapshot(
         roomTemperature: Double? = null,

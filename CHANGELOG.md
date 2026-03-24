@@ -2,9 +2,17 @@
 
 ## Unreleased
 
+## 0.3 - 2026-03-25
+
 - Launcher icons `mobile` и `wear` теперь берутся из PNG-исходников в `assets/icons/`.
 - `mobile` и `wear` больше не держат фиксированный `versionCode`: build number теперь автоматически растёт между сборками и показывается в UI как новый `build`.
 - README и GitHub Actions теперь явнее показывают signed/unsigned release state; отдельно зафиксировано, что существующий stable release keystore и уже заведённые GitHub secrets нужно переиспользовать, а генерация нового набора нужна только для первичной настройки.
+- `ZONT overview` переведён на более спокойный text-first render path без noisy leading icon и без принудительного ручного переноса строки: provider отдаёт одну плоскую строку, а конкретный watch face renderer сам решает, где её переложить.
+- `ZONT setpoint + coolant` и `ZONT room + air setpoint` оставлены в читаемом paired-виде с monochromatic pictogram и явной стрелочкой между текущим и целевым значением; даже если конкретный renderer скрывает leading icon, смысл пары остаётся понятен из текста.
+- Добавлен отдельный `ZONT color overview`: emoji-first provider для color-capable renderers, не заменяющий обычный монохромный `ZONT overview`.
+- `ZONT overview + icons` удалён из manifest и codebase как image-only provider без внятного практического сценария; если slot был привязан к нему раньше, после обновления его нужно переназначить через picker.
+- Зафиксировано текущее platform limitation: используемая Wear OS / AndroidX API-ветка не поддерживает inline drawable-пиктограммы внутри `ComplicationText`, поэтому stage 8 завершён честным text-first fallback с live-проверкой на эмуляторе и Galaxy watch face, а не с preview-only drawable-обещанием.
+- Inline `Material Symbols` для `ComplicationText` по-прежнему не считаются поддерживаемым путём: renderer watch face не даёт нам надёжно зафиксировать нужный font family, поэтому такие glyphs нельзя обещать как стабильный inline-вариант.
 
 ## 0.2 - 2026-03-24
 
@@ -33,5 +41,5 @@
 ## Known Limitations
 
 - Специальные Samsung Ultra-style slots могут оставаться недоступными для сторонних providers даже при наличии `RANGED_VALUE`; это вынесено в backlog этапа 5.
-- Для `overview + icons` итоговое поведение всё ещё зависит от конкретного watch face и типа slot; подробная практическая проверка вынесена в этап 5.
+- Текущая Wear OS complications API-ветка не поддерживает inline drawable-пиктограммы внутри `ComplicationText`, поэтому `LONG_TEXT` providers ограничены text/title плюс одной общей icon-областью на всю complication.
 - Без локального keystore или GitHub Actions signing secrets release build по-прежнему остаётся честным unsigned промежуточным output.

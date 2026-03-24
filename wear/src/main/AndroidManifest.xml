@@ -50,17 +50,17 @@
         </service>
 
         <service
-            android:name=".complications.CombinedLegendComplicationService"
+            android:name=".complications.CombinedColorComplicationService"
             android:exported="true"
             android:icon="@drawable/ic_complication_combined"
-            android:label="@string/combined_legend_provider_label"
+            android:label="@string/combined_color_provider_label"
             android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
             <intent-filter>
                 <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
             </intent-filter>
             <meta-data
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
-                android:value="SMALL_IMAGE,PHOTO_IMAGE" />
+                android:value="LONG_TEXT,SHORT_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />

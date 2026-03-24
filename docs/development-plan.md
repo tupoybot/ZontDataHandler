@@ -8,7 +8,7 @@
 - умеет либо принимать готовый `X-ZONT-Token`, либо получать его по логину и паролю через `get_authtoken`;
 - нормализует ответ в один компактный `snapshot`;
 - передаёт этот `snapshot` в Wear OS;
-- публикует набор `SHORT_TEXT`, `LONG_TEXT`, image-compatible и bounded `RANGED_VALUE` complications;
+- публикует набор `SHORT_TEXT`, `LONG_TEXT` и bounded `RANGED_VALUE` complications;
 - даёт простой status/debug экран на телефоне и на часах.
 
 Основные показатели проекта:
@@ -22,9 +22,9 @@
 
 5. желаемая температура воздуха в помещении (`roomSetpointTemperature`) для paired complication.
 
-## Фактический статус на 2026-03-24
+## Фактический статус на 2026-03-25
 
-По состоянию на `2026-03-24` базовая версия проекта уже реализована и доведена до релиза `0.2`.
+По состоянию на `2026-03-25` базовая версия проекта уже реализована и доведена до релиза `0.3`.
 
 Что фактически есть в репозитории:
 
@@ -35,7 +35,7 @@
 - автообновление через `WorkManager` с разделением transient/permanent ошибок;
 - 8 watch-side providers:
   - `ZONT overview`;
-  - `ZONT overview + icons`;
+  - `ZONT color overview`;
   - `ZONT room`;
   - `ZONT burner`;
   - `ZONT setpoint`;
@@ -43,9 +43,13 @@
   - `ZONT setpoint + coolant`;
   - `ZONT room + air setpoint`;
 - watch-side статусный экран и отображение установленного `version/build` на телефоне и на часах;
+- авто-инкремент `versionCode` между сборками с общим build number для `mobile` и `wear`;
 - GitHub Actions workflow для сборки debug/release APK;
 - локальный и CI-ready release signing path с явным unsigned fallback без секретов;
-- зафиксированное ограничение Samsung `Ultra Analog`: special/private slots не считаются обычным пользовательским сценарием для наших providers.
+- обновлённые launcher icons `mobile` и `wear` из `assets/icons/*.png`;
+- подтверждённый отрицательный результат Samsung-эксперимента: special/private slots `Ultra Analog` зарезервированы Samsung/system providers и не считаются обычным пользовательским сценарием для наших providers.
+
+Для будущих Codex-этапов единый сводный контекст теперь собран в `docs/codex-stage-context.md`, чтобы не читать все stage-планы подряд.
 
 ## Что берём из API
 
@@ -156,7 +160,7 @@ Fallback для устройств без `z3k-state` по-прежнему оп
 - обычные большие `LONG_TEXT`-слоты отделены от private Samsung slots;
 - `ZONT burner` получил безопасный bounded-эксперимент с `RANGED_VALUE`;
 - `ZONT overview + icons` переведён в image-compatible типы, чтобы не деградировать в text-only fallback;
-- ограничение `Ultra Analog` и похожих private slots зафиксировано в `docs/galaxy-specific.md`.
+- эксперимент со special Samsung slots завершился отрицательным выводом: специальные части `Ultra Analog` и похожих stock face зарезервированы Samsung/system providers и не открываются для сторонних complication data sources.
 
 ### Этап 6. Техническое усиление и release readiness — завершён
 
@@ -168,22 +172,32 @@ Fallback для устройств без `z3k-state` по-прежнему оп
 - GitHub Actions умеет восстанавливать keystore из secrets и честно различает signed/unsigned release outputs;
 - добавлены targeted unit-тесты для `shared` и refresh execution policy.
 
-### Этап 7. Финальный visual follow-up — следующий этап
+### Этап 7. Bounded Visual And Release Polish — завершён
 
-Что осталось сделать:
+Что было сделано:
 
-- нормализовать `ZONT overview`, чтобы он не выглядел как сжатая строка с агрессивным `...` в части больших слотов;
-- обновить launcher icons приложений `mobile` и `wear` из PNG-исходников в `assets/icons/*.png`;
-- убрать лишнюю стартовую пиктограмму у `LONG_TEXT` providers, если она действительно создаёт шум;
-- перепроверить, можно ли честно использовать пиктограмму перед каждым значением в `LONG_TEXT`; если платформа этого не даёт, оставить `LONG_TEXT` чисто текстовым, а `ZONT overview + icons` считать image-first вариантом;
-- если конкретный большой слот не вмещает полный `overview`, выбрать честный и предсказуемый fallback вместо случайного обрезания строки;
-- проверить typography `ZONT burner` на нескольких face/slot combinations и исправлять только подтверждённую layout-независимую проблему;
-- добавить лёгкую regression-страховку для wear-side `LONG_TEXT` / preview data / supported types, чтобы visual polish не сломал providers;
-- синхронно обновить README, manual check и, если понадобится, screenshots после финальной visual-правки.
+- обновлены launcher icons приложений `mobile` и `wear` из PNG-исходников в `assets/icons/*.png`;
+- release signing path доведён до practically achievable состояния локально и в GitHub Actions;
+- `versionCode` теперь автоматически меняется между сборками и остаётся общим для `mobile` и `wear` в одном Gradle-запуске;
+- проведён bounded review complication render path и подтверждено, что более глубокий complication follow-up нужно выносить в отдельный следующий этап;
+- агрессивные visual-эксперименты, которые делали live-render хуже baseline, не были закреплены как "готовый результат".
 
-### Этап 8. Phone-side usability и onboarding — опциональный следующий этап
+### Этап 8. Complication Follow-Up And Provider Cleanup — завершён
 
-Если после этапа 7 захочется двигаться дальше, разумный следующий фокус уже не visual polish complications, а удобство настройки приложения.
+Что было сделано:
+
+- проведён review текущего complication render path с bad-скриншотами как антипримером;
+- `ZONT overview` переведён на спокойный text-first render path без noisy leading icon и без жёстко прошитого ручного переноса строки: provider отдаёт одну строку, а renderer watch face сам решает, как её перенести;
+- `ZONT setpoint + coolant` и `ZONT room + air setpoint` приведены к одному практическому paired-правилу: monochromatic pictogram сохраняется там, где renderer его показывает, а secondary value остаётся явно отмеченным стрелочкой `→`, поэтому пара остаётся понятной даже на face, который скрывает leading icon;
+- `ZONT overview + icons` удалён из manifest/code/docs как provider без понятного практического сценария;
+- platform limitation зафиксирована честно: текущая Wear OS API-ветка не поддерживает inline drawable-пиктограммы внутри `ComplicationText`, поэтому bounded fallback остался text-first и подтверждался не только preview, но и live-render проверкой на эмуляторе и Galaxy;
+- manual check и docs обновлены согласованно, включая note о том, что slot с удалённым provider после обновления нужно переназначить через picker.
+- отдельным follow-up после stage 8 добавлен `ZONT color overview` как emoji-first provider для color-capable renderers;
+- inline `Material Symbols` вместо Unicode по-прежнему не считаются надёжным вариантом для `ComplicationText`.
+
+### Этап 9. Phone-side usability и onboarding — следующий опциональный этап
+
+После complication-focused stage 8 разумный следующий фокус уже снова phone-side UX.
 
 Что может входить:
 
@@ -191,9 +205,10 @@ Fallback для устройств без `z3k-state` по-прежнему оп
 - более понятный first-run flow после `Get token`;
 - явное подтверждение, какое устройство и какие источники метрик сейчас выбраны;
 - более дружелюбная phone-side диагностика для `phone -> watch` sync и проблем с настройкой;
+- открытие существующего watch-side приложения по нажатию на complication как ожидаемое Wear OS поведение;
 - дополнительная полировка статуса/онбординга без изменения базовой архитектуры.
 
-Этот этап не обязателен для готовности текущей версии, но выглядит самым логичным продолжением после завершения stage 7.
+Этот этап не обязателен для готовности текущей версии, но выглядит логичным продолжением после завершения stage 8.
 
 ## Что не нужно в первом приближении
 
@@ -246,12 +261,12 @@ Fallback для устройств без `z3k-state` по-прежнему оп
 - на часах доступны 8 complication providers, включая:
   - обычные `SHORT_TEXT` providers;
   - `LONG_TEXT` combined/paired providers;
-  - image-compatible `ZONT overview + icons`;
+  - отдельный emoji-first `ZONT color overview`;
   - bounded `RANGED_VALUE` для `ZONT burner`;
 - обычные большие слоты watch face, которые открывают стандартный picker и принимают `LONG_TEXT`, считаются рабочим сценарием;
 - private Samsung slots уровня `Ultra Analog` считаются внешним ограничением конкретного stock face, а не дефектом проекта;
 - `wear`-приложение существует и достаточно для работы providers и синхронизации;
-- телефон и часы показывают установленный `version/build`;
+- телефон и часы показывают установленный `version/build`, а номер сборки автоматически меняется между новыми `assemble`;
 - release signing path описан локально и в GitHub Actions, а unsigned fallback помечен честно;
 - в репозитории нет секретов;
 - есть понятная инструкция по ручной проверке на эмуляторе, `Galaxy S23+` и `Galaxy Watch Ultra`.
