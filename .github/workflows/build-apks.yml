@@ -40,13 +40,17 @@ jobs:
         run: chmod +x gradlew
 
       - name: Restore release keystore from GitHub Secrets
-        if: ${{ secrets.ZONT_RELEASE_KEYSTORE_BASE64 != '' && secrets.ZONT_RELEASE_STORE_PASSWORD != '' && secrets.ZONT_RELEASE_KEY_ALIAS != '' && secrets.ZONT_RELEASE_KEY_PASSWORD != '' }}
         env:
           ZONT_RELEASE_KEYSTORE_BASE64: ${{ secrets.ZONT_RELEASE_KEYSTORE_BASE64 }}
           ZONT_RELEASE_STORE_PASSWORD: ${{ secrets.ZONT_RELEASE_STORE_PASSWORD }}
           ZONT_RELEASE_KEY_ALIAS: ${{ secrets.ZONT_RELEASE_KEY_ALIAS }}
           ZONT_RELEASE_KEY_PASSWORD: ${{ secrets.ZONT_RELEASE_KEY_PASSWORD }}
         run: |
+          if [ -z "${ZONT_RELEASE_KEYSTORE_BASE64:-}" ] || [ -z "${ZONT_RELEASE_STORE_PASSWORD:-}" ] || [ -z "${ZONT_RELEASE_KEY_ALIAS:-}" ] || [ -z "${ZONT_RELEASE_KEY_PASSWORD:-}" ]; then
+            printf 'Release signing secrets are not fully configured. Continuing with unsigned release outputs.\n'
+            exit 0
+          fi
+
           KEYSTORE_DIR="$RUNNER_TEMP/zont-release-signing"
           KEYSTORE_PATH="$KEYSTORE_DIR/zont-release.keystore"
 
