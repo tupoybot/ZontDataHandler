@@ -86,19 +86,27 @@
 2. Переменные окружения:
    `ZONT_RELEASE_STORE_FILE`, `ZONT_RELEASE_STORE_PASSWORD`, `ZONT_RELEASE_KEY_ALIAS`, `ZONT_RELEASE_KEY_PASSWORD`.
 
-Для локальной подготовки release signing есть готовый скрипт:
+Номер сборки теперь инкрементируется автоматически между сборками:
+
+- по умолчанию `versionCode` берётся из текущего Unix time в секундах, поэтому телефон и часы показывают новый `build` почти при каждом новом `assemble`;
+- если нужен явный override, можно задать `ZONT_BUILD_NUMBER`;
+- в одном Gradle-запуске `mobile` и `wear` используют один и тот же build number.
+
+Нормальный рабочий сценарий для проекта: использовать один и тот же уже существующий release keystore и те же GitHub Actions secrets для всех следующих release/update APK.
+
+Для первичной локальной подготовки release signing есть готовый скрипт:
 
 ```bash
 ./scripts/generate_release_signing_materials.sh
 ```
 
-Он создаст:
+Он нужен только если signing path ещё не настроен. Скрипт создаст:
 
 - gitignored keystore в `.release-local/zont-release.keystore`;
 - gitignored локальный `keystore.properties` для Gradle;
 - gitignored `.release-local/github-actions-secrets.env` с готовыми значениями для GitHub Actions secrets.
 
-Шаблон для локального файла есть в [keystore.properties.example](keystore.properties.example). Рабочий `keystore.properties` уже игнорируется git, а сам keystore должен храниться вне репозитория и использоваться повторно для всех будущих release update-пакетов.
+Шаблон для локального файла есть в [keystore.properties.example](keystore.properties.example). Рабочий `keystore.properties` уже игнорируется git, а сам keystore должен храниться вне репозитория и использоваться повторно для всех будущих release update-пакетов. Если release signing уже настроен локально и в GitHub Actions, генерировать новый набор не нужно.
 
 APK после сборки:
 
@@ -107,7 +115,9 @@ APK после сборки:
 - `mobile/build/outputs/apk/release/mobile-release.apk` или `mobile-release-unsigned.apk`
 - `wear/build/outputs/apk/release/wear-release.apk` или `wear-release-unsigned.apk`
 
-В GitHub Actions есть workflow `build-apks`, который собирает те же debug/release APK, публикует их как artifacts и при push тега создаёт GitHub Release с приложенными APK assets. По умолчанию публичный workflow остаётся без секретов и поэтому обычно публикует unsigned release outputs; если runner получает signing secrets, workflow автоматически восстанавливает keystore и публикует уже signed `*-release.apk`.
+В GitHub Actions есть workflow `build-apks`, который собирает те же debug/release APK, публикует их как artifacts и при push тега создаёт GitHub Release с приложенными APK assets. По умолчанию публичный workflow остаётся без секретов и поэтому публикует unsigned release outputs; если runner получает signing secrets, workflow автоматически восстанавливает keystore, ожидает уже signed `*-release.apk` и отдельно пишет итоговое signed/unsigned состояние в job summary.
+
+Если GitHub Actions secrets уже заведены для вашего стабильного release keystore, переcоздавать их не нужно. Ниже описан только первичный bootstrap для репозитория, где signing path ещё не настраивался.
 
 GitHub secrets нужно заводить так:
 
@@ -118,6 +128,7 @@ GitHub secrets нужно заводить так:
    `ZONT_RELEASE_KEY_ALIAS`
    `ZONT_RELEASE_KEY_PASSWORD`
 3. Источником значений может быть локальный gitignored файл `.release-local/github-actions-secrets.env`, который создаёт `./scripts/generate_release_signing_materials.sh`.
+4. Запустите workflow `build-apks` через `Run workflow` или push тега и проверьте в job summary строку `Release signing state: signed`.
 
 ## Setup
 

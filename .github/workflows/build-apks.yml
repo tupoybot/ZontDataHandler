@@ -40,6 +40,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Restore release keystore from GitHub Secrets
+        id: release_signing
         env:
           ZONT_RELEASE_KEYSTORE_BASE64: ${{ secrets.ZONT_RELEASE_KEYSTORE_BASE64 }}
           ZONT_RELEASE_STORE_PASSWORD: ${{ secrets.ZONT_RELEASE_STORE_PASSWORD }}
@@ -48,6 +49,7 @@ jobs:
         run: |
           if [ -z "${ZONT_RELEASE_KEYSTORE_BASE64:-}" ] || [ -z "${ZONT_RELEASE_STORE_PASSWORD:-}" ] || [ -z "${ZONT_RELEASE_KEY_ALIAS:-}" ] || [ -z "${ZONT_RELEASE_KEY_PASSWORD:-}" ]; then
             printf 'Release signing secrets are not fully configured. Continuing with unsigned release outputs.\n'
+            printf 'signing_state=unsigned\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -64,20 +66,38 @@ jobs:
             printf 'ZONT_RELEASE_KEY_PASSWORD=%s\n' "$ZONT_RELEASE_KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
+          printf 'signing_state=signed\n' >> "$GITHUB_OUTPUT"
+
       - name: Build debug and release APKs
         run: ./gradlew :mobile:assembleDebug :mobile:assembleRelease :wear:assembleDebug :wear:assembleRelease
 
       - name: Detect release APK outputs
         id: release_outputs
+        env:
+          SIGNING_STATE: ${{ steps.release_signing.outputs.signing_state }}
         run: |
           detect_release_apk() {
             local dir="$1"
             local prefix="$2"
             local apk
 
-            apk="$(find "$dir" -maxdepth 1 -type f -name "${prefix}-release*.apk" | sort | head -n 1)"
-            if [ -z "$apk" ]; then
-              printf 'No release APK found in %s for %s\n' "$dir" "$prefix" >&2
+            case "${SIGNING_STATE:-unsigned}" in
+              signed)
+                apk="$dir/${prefix}-release.apk"
+                ;;
+              unsigned)
+                apk="$dir/${prefix}-release-unsigned.apk"
+                ;;
+              *)
+                printf 'Unexpected signing state: %s\n' "${SIGNING_STATE:-}" >&2
+                exit 1
+                ;;
+            esac
+
+            if [ ! -f "$apk" ]; then
+              printf 'Expected %s release APK for %s at %s, but it was not found.\n' "${SIGNING_STATE:-unsigned}" "$prefix" "$apk" >&2
+              printf 'Available release APKs in %s:\n' "$dir" >&2
+              find "$dir" -maxdepth 1 -type f -name "${prefix}-release*.apk" -printf '  %f\n' >&2 || true
               exit 1
             fi
 
@@ -88,6 +108,7 @@ jobs:
           WEAR_APK="$(detect_release_apk wear/build/outputs/apk/release wear)"
 
           {
+            printf 'signing_state=%s\n' "${SIGNING_STATE:-unsigned}"
             printf 'mobile_path=%s\n' "$MOBILE_APK"
             printf 'mobile_artifact_name=%s-apk\n' "$(basename "${MOBILE_APK%.apk}")"
             printf 'wear_path=%s\n' "$WEAR_APK"
@@ -96,6 +117,7 @@ jobs:
 
       - name: Verify release APK signing state
         env:
+          SIGNING_STATE: ${{ steps.release_outputs.outputs.signing_state }}
           MOBILE_APK: ${{ steps.release_outputs.outputs.mobile_path }}
           WEAR_APK: ${{ steps.release_outputs.outputs.wear_path }}
         run: |
@@ -123,13 +145,23 @@ jobs:
             fi
           }
 
-          if [ -n "${ZONT_RELEASE_STORE_FILE:-}" ]; then
+          if [ "${SIGNING_STATE:-unsigned}" = "signed" ]; then
             verify_signed_release "$MOBILE_APK"
             verify_signed_release "$WEAR_APK"
           else
             verify_unsigned_release "$MOBILE_APK"
             verify_unsigned_release "$WEAR_APK"
           fi
+
+      - name: Summarize release APK state
+        run: |
+          {
+            printf '### Release APK signing\n\n'
+            printf -- '- Release signing state: `%s`\n' "${{ steps.release_outputs.outputs.signing_state }}"
+            printf -- '- Mobile release artifact: `%s`\n' "${{ steps.release_outputs.outputs.mobile_artifact_name }}"
+            printf -- '- Wear release artifact: `%s`\n' "${{ steps.release_outputs.outputs.wear_artifact_name }}"
+            printf -- '- Secrets expected for signed builds: `ZONT_RELEASE_KEYSTORE_BASE64`, `ZONT_RELEASE_STORE_PASSWORD`, `ZONT_RELEASE_KEY_ALIAS`, `ZONT_RELEASE_KEY_PASSWORD`\n'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload mobile debug APK
         uses: actions/upload-artifact@v4

@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Этап 7 задокументирован как косметический follow-up: обновление `LONG_TEXT` layout для paired complications и отдельная проверка typography `ZONT burner` перед возможной правкой размера шрифта.
+- Launcher icons `mobile` и `wear` теперь берутся из PNG-исходников в `assets/icons/`.
+- `mobile` и `wear` больше не держат фиксированный `versionCode`: build number теперь автоматически растёт между сборками и показывается в UI как новый `build`.
+- README и GitHub Actions теперь явнее показывают signed/unsigned release state; отдельно зафиксировано, что существующий stable release keystore и уже заведённые GitHub secrets нужно переиспользовать, а генерация нового набора нужна только для первичной настройки.
 
 ## 0.2 - 2026-03-24
 

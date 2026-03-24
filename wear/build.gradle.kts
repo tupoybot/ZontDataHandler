@@ -1,4 +1,5 @@
 import java.io.File
+import java.time.Instant
 import java.util.Properties
 
 data class ReleaseSigningConfig(
@@ -7,6 +8,27 @@ data class ReleaseSigningConfig(
     val keyAlias: String,
     val keyPassword: String,
 )
+
+fun resolveBuildVersionCode(): Int {
+    fun readEnvInt(name: String): Int? {
+        return System.getenv(name)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.toIntOrNull()
+    }
+
+    val extraProperties = rootProject.extensions.extraProperties
+    val cached = extraProperties.properties["zontBuildVersionCode"] as? Int
+    if (cached != null) {
+        return cached
+    }
+
+    val resolved = readEnvInt("ZONT_BUILD_NUMBER")
+        ?: Instant.now().epochSecond.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+
+    extraProperties["zontBuildVersionCode"] = resolved
+    return resolved
+}
 
 fun loadReleaseSigningConfig(): ReleaseSigningConfig? {
     val keystoreProperties = Properties()
@@ -57,6 +79,7 @@ fun loadReleaseSigningConfig(): ReleaseSigningConfig? {
 }
 
 val releaseSigning = loadReleaseSigningConfig()
+val buildVersionCode = resolveBuildVersionCode()
 
 plugins {
     alias(libs.plugins.android.application)
@@ -72,7 +95,7 @@ android {
         applicationId = "com.botkin.zontdatahandler"
         minSdk = 30
         targetSdk = 35
-        versionCode = 4
+        versionCode = buildVersionCode
         versionName = "0.2"
     }
 
