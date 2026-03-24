@@ -28,6 +28,7 @@
 - автоматически запросить список устройств и по возможности подставить `device_id`;
 - синхронизировать данные по цепочке `phone -> watch`;
 - показать на часах overview-экран с несколькими ключевыми метриками;
+- показывать установленный version/build на телефоне и на часах для ручной проверки sideload/install path;
 - опубликовать набор complication providers для разных типов слотов и watch face.
 
 ## Providers
@@ -73,14 +74,50 @@
 ./gradlew :mobile:assembleRelease :wear:assembleRelease
 ```
 
+`debug` и `release` здесь не равны по готовности:
+
+- `debug` всегда автоматически подписывается стандартным debug keystore Android Studio / Gradle и подходит только для debug-over-debug install/update пути;
+- `release` становится по-настоящему install/update-ready только если вы подписываете его стабильным приватным keystore;
+- если release keystore не задан, Gradle честно собирает промежуточный unsigned output, а не "готовый релиз".
+
+Поддерживаемые способы задать release signing:
+
+1. Локальный gitignored `keystore.properties` в корне проекта.
+2. Переменные окружения:
+   `ZONT_RELEASE_STORE_FILE`, `ZONT_RELEASE_STORE_PASSWORD`, `ZONT_RELEASE_KEY_ALIAS`, `ZONT_RELEASE_KEY_PASSWORD`.
+
+Для локальной подготовки release signing есть готовый скрипт:
+
+```bash
+./scripts/generate_release_signing_materials.sh
+```
+
+Он создаст:
+
+- gitignored keystore в `.release-local/zont-release.keystore`;
+- gitignored локальный `keystore.properties` для Gradle;
+- gitignored `.release-local/github-actions-secrets.env` с готовыми значениями для GitHub Actions secrets.
+
+Шаблон для локального файла есть в [keystore.properties.example](keystore.properties.example). Рабочий `keystore.properties` уже игнорируется git, а сам keystore должен храниться вне репозитория и использоваться повторно для всех будущих release update-пакетов.
+
 APK после сборки:
 
 - `mobile/build/outputs/apk/debug/mobile-debug.apk`
 - `wear/build/outputs/apk/debug/wear-debug.apk`
-- `mobile/build/outputs/apk/release/mobile-release-unsigned.apk`
-- `wear/build/outputs/apk/release/wear-release-unsigned.apk`
+- `mobile/build/outputs/apk/release/mobile-release.apk` или `mobile-release-unsigned.apk`
+- `wear/build/outputs/apk/release/wear-release.apk` или `wear-release-unsigned.apk`
 
-В GitHub Actions есть workflow `build-apks`, который собирает те же debug/release APK, публикует их как artifacts и при push тега создаёт GitHub Release с приложенными APK assets.
+В GitHub Actions есть workflow `build-apks`, который собирает те же debug/release APK, публикует их как artifacts и при push тега создаёт GitHub Release с приложенными APK assets. По умолчанию публичный workflow остаётся без секретов и поэтому обычно публикует unsigned release outputs; если runner получает signing secrets, workflow автоматически восстанавливает keystore и публикует уже signed `*-release.apk`.
+
+GitHub secrets нужно заводить так:
+
+1. Откройте `Repository -> Settings -> Secrets and variables -> Actions`.
+2. В разделе `Repository secrets` добавьте:
+   `ZONT_RELEASE_KEYSTORE_BASE64`
+   `ZONT_RELEASE_STORE_PASSWORD`
+   `ZONT_RELEASE_KEY_ALIAS`
+   `ZONT_RELEASE_KEY_PASSWORD`
+3. Источником значений может быть локальный gitignored файл `.release-local/github-actions-secrets.env`, который создаёт `./scripts/generate_release_signing_materials.sh`.
 
 ## Setup
 
@@ -104,10 +141,15 @@ APK после сборки:
 
 1. Проверить, что `Refresh` обновляет snapshot на телефоне без изменения подтверждённого маппинга метрик.
 2. Проверить, что данные доходят до `wear` после успешного refresh.
-3. Проверить исходные 8 providers на обычных текстовых слотах.
-4. Проверить `ZONT overview`, `ZONT setpoint + coolant` и `ZONT room + air setpoint` в обычном большом `LONG_TEXT`-слоте, включая нижний большой слот на совместимом watch face.
-5. Отдельно проверить `ZONT overview + icons` на image-compatible слотах или в picker preview и убедиться, что он не деградирует в буквенную легенду.
-6. Проверить placeholder/stale поведение, если refresh сломан или данные старые.
+3. Проверить, что телефон и часы показывают ожидаемый установленный version/build.
+4. Проверить исходные 8 providers на обычных текстовых слотах.
+5. Проверить `ZONT overview`, `ZONT setpoint + coolant` и `ZONT room + air setpoint` в обычном большом `LONG_TEXT`-слоте, включая нижний большой слот на совместимом watch face.
+6. Отдельно проверить `ZONT overview + icons` на image-compatible слотах или в picker preview и убедиться, что он не деградирует в буквенную легенду.
+7. Проверить placeholder/stale поведение, если refresh сломан или данные старые.
+8. Проверить release APK path отдельно:
+   debug поверх debug должен обновляться;
+   unsigned release не должен называться "готовым install/update path";
+   signed release-over-release возможен только при одной и той же приватной подписи.
 
 Реальный путь тестирования:
 

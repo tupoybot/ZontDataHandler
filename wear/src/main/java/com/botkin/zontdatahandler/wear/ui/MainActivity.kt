@@ -1,5 +1,9 @@
 package com.botkin.zontdatahandler.wear.ui
 
+import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,11 +20,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.botkin.zontdatahandler.shared.combinedShortText
 import com.botkin.zontdatahandler.shared.combinedShortTitle
 import com.botkin.zontdatahandler.shared.withComputedStaleness
+import com.botkin.zontdatahandler.wear.R
 import com.botkin.zontdatahandler.wear.data.WearSnapshotStore
 import java.time.Instant
 import java.time.ZoneId
@@ -56,6 +63,7 @@ class MainActivity : ComponentActivity() {
 private fun WearStatusScreen(
     snapshot: com.botkin.zontdatahandler.shared.ZontSnapshot?,
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -70,8 +78,13 @@ private fun WearStatusScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "ZONT",
+                    text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = "Watch build ${installedBuildLabel(context)}",
+                    style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
                 )
                 if (snapshot == null) {
@@ -114,3 +127,22 @@ private fun formatEpochSeconds(epochSeconds: Long): String {
 
 private val timestampFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("MM-dd HH:mm")
+
+private fun installedBuildLabel(context: Context): String {
+    val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0L),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0)
+    }
+    val versionName = packageInfo.versionName ?: "--"
+    val buildType = if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+        "debug"
+    } else {
+        "release"
+    }
+    return "$versionName (${packageInfo.longVersionCode}) $buildType"
+}

@@ -3,6 +3,7 @@ package com.botkin.zontdatahandler.mobile.work
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.botkin.zontdatahandler.mobile.data.RefreshOutcome
 import com.botkin.zontdatahandler.mobile.mobileAppContainer
 
 class AutoRefreshWorker(
@@ -10,7 +11,9 @@ class AutoRefreshWorker(
     workerParameters: WorkerParameters,
 ) : CoroutineWorker(appContext, workerParameters) {
     override suspend fun doWork(): Result {
-        applicationContext.mobileAppContainer.repository.refreshFromWorker()
-        return Result.success()
+        return when (val outcome = applicationContext.mobileAppContainer.repository.refreshFromWorker()) {
+            is RefreshOutcome.Success -> Result.success()
+            is RefreshOutcome.Failure -> if (outcome.shouldRetry) Result.retry() else Result.failure()
+        }
     }
 }

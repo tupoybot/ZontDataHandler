@@ -39,8 +39,93 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Restore release keystore from GitHub Secrets
+        if: ${{ secrets.ZONT_RELEASE_KEYSTORE_BASE64 != '' && secrets.ZONT_RELEASE_STORE_PASSWORD != '' && secrets.ZONT_RELEASE_KEY_ALIAS != '' && secrets.ZONT_RELEASE_KEY_PASSWORD != '' }}
+        env:
+          ZONT_RELEASE_KEYSTORE_BASE64: ${{ secrets.ZONT_RELEASE_KEYSTORE_BASE64 }}
+          ZONT_RELEASE_STORE_PASSWORD: ${{ secrets.ZONT_RELEASE_STORE_PASSWORD }}
+          ZONT_RELEASE_KEY_ALIAS: ${{ secrets.ZONT_RELEASE_KEY_ALIAS }}
+          ZONT_RELEASE_KEY_PASSWORD: ${{ secrets.ZONT_RELEASE_KEY_PASSWORD }}
+        run: |
+          KEYSTORE_DIR="$RUNNER_TEMP/zont-release-signing"
+          KEYSTORE_PATH="$KEYSTORE_DIR/zont-release.keystore"
+
+          mkdir -p "$KEYSTORE_DIR"
+          printf '%s' "$ZONT_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+
+          {
+            printf 'ZONT_RELEASE_STORE_FILE=%s\n' "$KEYSTORE_PATH"
+            printf 'ZONT_RELEASE_STORE_PASSWORD=%s\n' "$ZONT_RELEASE_STORE_PASSWORD"
+            printf 'ZONT_RELEASE_KEY_ALIAS=%s\n' "$ZONT_RELEASE_KEY_ALIAS"
+            printf 'ZONT_RELEASE_KEY_PASSWORD=%s\n' "$ZONT_RELEASE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Build debug and release APKs
         run: ./gradlew :mobile:assembleDebug :mobile:assembleRelease :wear:assembleDebug :wear:assembleRelease
+
+      - name: Detect release APK outputs
+        id: release_outputs
+        run: |
+          detect_release_apk() {
+            local dir="$1"
+            local prefix="$2"
+            local apk
+
+            apk="$(find "$dir" -maxdepth 1 -type f -name "${prefix}-release*.apk" | sort | head -n 1)"
+            if [ -z "$apk" ]; then
+              printf 'No release APK found in %s for %s\n' "$dir" "$prefix" >&2
+              exit 1
+            fi
+
+            printf '%s\n' "$apk"
+          }
+
+          MOBILE_APK="$(detect_release_apk mobile/build/outputs/apk/release mobile)"
+          WEAR_APK="$(detect_release_apk wear/build/outputs/apk/release wear)"
+
+          {
+            printf 'mobile_path=%s\n' "$MOBILE_APK"
+            printf 'mobile_artifact_name=%s-apk\n' "$(basename "${MOBILE_APK%.apk}")"
+            printf 'wear_path=%s\n' "$WEAR_APK"
+            printf 'wear_artifact_name=%s-apk\n' "$(basename "${WEAR_APK%.apk}")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify release APK signing state
+        env:
+          MOBILE_APK: ${{ steps.release_outputs.outputs.mobile_path }}
+          WEAR_APK: ${{ steps.release_outputs.outputs.wear_path }}
+        run: |
+          APKSIGNER="$(find "${ANDROID_SDK_ROOT:-$ANDROID_HOME}/build-tools" -type f -name apksigner | sort | tail -n 1)"
+
+          if [ -z "$APKSIGNER" ]; then
+            printf 'apksigner was not found in Android build-tools\n' >&2
+            exit 1
+          fi
+
+          verify_signed_release() {
+            local apk="$1"
+
+            printf 'Verifying signed release APK: %s\n' "$apk"
+            "$APKSIGNER" verify --verbose --print-certs "$apk"
+          }
+
+          verify_unsigned_release() {
+            local apk="$1"
+
+            printf 'Verifying unsigned fallback release APK: %s\n' "$apk"
+            if "$APKSIGNER" verify --verbose "$apk" >/dev/null 2>&1; then
+              printf 'Expected unsigned release APK when signing inputs are absent, but %s is signed\n' "$apk" >&2
+              exit 1
+            fi
+          }
+
+          if [ -n "${ZONT_RELEASE_STORE_FILE:-}" ]; then
+            verify_signed_release "$MOBILE_APK"
+            verify_signed_release "$WEAR_APK"
+          else
+            verify_unsigned_release "$MOBILE_APK"
+            verify_unsigned_release "$WEAR_APK"
+          fi
 
       - name: Upload mobile debug APK
         uses: actions/upload-artifact@v4
@@ -59,15 +144,15 @@ jobs:
       - name: Upload mobile release APK
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-release-apk
-          path: mobile/build/outputs/apk/release/*.apk
+          name: ${{ steps.release_outputs.outputs.mobile_artifact_name }}
+          path: ${{ steps.release_outputs.outputs.mobile_path }}
           if-no-files-found: error
 
       - name: Upload wear release APK
         uses: actions/upload-artifact@v4
         with:
-          name: wear-release-apk
-          path: wear/build/outputs/apk/release/*.apk
+          name: ${{ steps.release_outputs.outputs.wear_artifact_name }}
+          path: ${{ steps.release_outputs.outputs.wear_path }}
           if-no-files-found: error
 
       - name: Prepare release notes
@@ -105,8 +190,8 @@ jobs:
           APKS=(
             mobile/build/outputs/apk/debug/mobile-debug.apk
             wear/build/outputs/apk/debug/wear-debug.apk
-            mobile/build/outputs/apk/release/mobile-release-unsigned.apk
-            wear/build/outputs/apk/release/wear-release-unsigned.apk
+            "${{ steps.release_outputs.outputs.mobile_path }}"
+            "${{ steps.release_outputs.outputs.wear_path }}"
           )
 
           if gh release view "$TAG" >/dev/null 2>&1; then

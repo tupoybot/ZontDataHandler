@@ -20,7 +20,7 @@ class MobileAppContainer(
 
     val preferencesStore = ZontPreferencesStore(appContext)
     private val workManager = WorkManager.getInstance(appContext)
-    private val autoRefreshScheduler = AutoRefreshScheduler(appContext, workManager)
+    private val autoRefreshScheduler = AutoRefreshScheduler(workManager)
     private val apiClient = ZontApiClient()
     private val dataLayerSync = ZontDataLayerSync(appContext)
 
@@ -33,7 +33,7 @@ class MobileAppContainer(
 
     fun bootstrap() {
         appScope.launch {
-            autoRefreshScheduler.syncWithStoredSettings(preferencesStore)
+            autoRefreshScheduler.syncWithStoredState(preferencesStore.readState())
         }
     }
 }

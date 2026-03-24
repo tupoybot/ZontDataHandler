@@ -1,3 +1,63 @@
+import java.io.File
+import java.util.Properties
+
+data class ReleaseSigningConfig(
+    val storeFile: File,
+    val storePassword: String,
+    val keyAlias: String,
+    val keyPassword: String,
+)
+
+fun loadReleaseSigningConfig(): ReleaseSigningConfig? {
+    val keystoreProperties = Properties()
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    if (keystorePropertiesFile.isFile) {
+        keystorePropertiesFile.inputStream().use(keystoreProperties::load)
+    }
+
+    fun readValue(propertyName: String, envName: String): String? {
+        return System.getenv(envName)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: keystoreProperties.getProperty(propertyName)?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    val storePath = readValue("storeFile", "ZONT_RELEASE_STORE_FILE")
+    val storePassword = readValue("storePassword", "ZONT_RELEASE_STORE_PASSWORD")
+    val keyAlias = readValue("keyAlias", "ZONT_RELEASE_KEY_ALIAS")
+    val keyPassword = readValue("keyPassword", "ZONT_RELEASE_KEY_PASSWORD")
+    val resolvedValues = listOf(storePath, storePassword, keyAlias, keyPassword)
+
+    if (resolvedValues.all { it == null }) {
+        return null
+    }
+    if (resolvedValues.any { it.isNullOrBlank() }) {
+        logger.warn("Release signing config is incomplete. Building unsigned wear release APK.")
+        return null
+    }
+
+    val resolvedStoreFile = File(storePath!!).let { candidate ->
+        if (candidate.isAbsolute) {
+            candidate
+        } else {
+            rootProject.file(storePath)
+        }
+    }
+    if (!resolvedStoreFile.isFile) {
+        logger.warn(
+            "Release signing config was provided, but the keystore file was not found at ${resolvedStoreFile.path}. Building unsigned wear release APK.",
+        )
+        return null
+    }
+
+    return ReleaseSigningConfig(
+        storeFile = resolvedStoreFile,
+        storePassword = storePassword!!,
+        keyAlias = keyAlias!!,
+        keyPassword = keyPassword!!,
+    )
+}
+
+val releaseSigning = loadReleaseSigningConfig()
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -12,8 +72,25 @@ android {
         applicationId = "com.botkin.zontdatahandler"
         minSdk = 30
         targetSdk = 35
-        versionCode = 3
+        versionCode = 4
         versionName = "0.2"
+    }
+
+    signingConfigs {
+        releaseSigning?.let { config ->
+            create("externalRelease") {
+                storeFile = config.storeFile
+                storePassword = config.storePassword
+                keyAlias = config.keyAlias
+                keyPassword = config.keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.findByName("externalRelease")
+        }
     }
 
     buildFeatures {

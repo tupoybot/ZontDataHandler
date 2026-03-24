@@ -15,11 +15,20 @@ class ZontDataLayerSync(
 ) {
     private val appContext = context.applicationContext
 
-    suspend fun pushSnapshot(snapshot: ZontSnapshot) = withContext(Dispatchers.IO) {
+    suspend fun pushSnapshot(
+        snapshot: ZontSnapshot,
+        urgent: Boolean,
+    ) = withContext(Dispatchers.IO) {
         val request = PutDataMapRequest.create(SnapshotTransport.dataPath).apply {
             dataMap.putString(SnapshotTransport.snapshotJsonKey, SnapshotJson.encode(snapshot))
             dataMap.putLong(SnapshotTransport.syncedAtKey, System.currentTimeMillis())
-        }.asPutDataRequest().setUrgent()
+        }.asPutDataRequest().let { putDataRequest ->
+            if (urgent) {
+                putDataRequest.setUrgent()
+            } else {
+                putDataRequest
+            }
+        }
 
         Tasks.await(Wearable.getDataClient(appContext).putDataItem(request))
     }

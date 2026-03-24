@@ -15,7 +15,7 @@ class ZontSnapshotRepository(
     suspend fun saveSettings(settings: ZontSettings) {
         val sanitized = settings.sanitized()
         preferencesStore.saveSettings(sanitized)
-        autoRefreshScheduler.syncWithSettings(sanitized)
+        autoRefreshScheduler.scheduleFromSettings(sanitized)
     }
 
     suspend fun obtainToken(
@@ -75,38 +75,54 @@ class ZontSnapshotRepository(
         }
     }
 
-    suspend fun refreshNow(): RefreshOutcome {
+    suspend fun refreshNow(trigger: RefreshTrigger = RefreshTrigger.MANUAL): RefreshOutcome {
         val state = preferencesStore.readState()
         val settings = state.settings.sanitized()
 
         if (!settings.isReadyForRefresh) {
             val message = "Fill in X-ZONT-Client, X-ZONT-Token and device_id before refresh."
-            preferencesStore.saveFailure(state.snapshot, settings, message)
-            autoRefreshScheduler.syncWithSettings(settings)
+            preferencesStore.saveFailure(
+                previousSnapshot = state.snapshot,
+                settings = settings,
+                errorMessage = message,
+                autoRefreshPaused = false,
+            )
+            autoRefreshScheduler.cancel()
             return RefreshOutcome.Failure(message)
         }
 
-        val outcome = when (val result = apiClient.fetchSnapshot(settings, state.snapshot)) {
-            is ApiRefreshResult.Success -> handleRefreshSuccess(result.snapshot)
-            is ApiRefreshResult.Failure -> {
-                preferencesStore.saveFailure(state.snapshot, settings, result.message)
-                RefreshOutcome.Failure(result.message)
-            }
+        return when (val result = apiClient.fetchSnapshot(settings, state.snapshot)) {
+            is ApiRefreshResult.Success -> handleRefreshSuccess(
+                snapshot = result.snapshot,
+                settings = settings,
+                trigger = trigger,
+            )
+
+            is ApiRefreshResult.Failure -> handleRefreshFailure(
+                previousSnapshot = state.snapshot,
+                settings = settings,
+                trigger = trigger,
+                failure = result,
+            )
         }
-
-        autoRefreshScheduler.syncWithSettings(settings)
-        return outcome
     }
 
-    suspend fun refreshFromWorker() {
-        refreshNow()
+    suspend fun refreshFromWorker(): RefreshOutcome {
+        return refreshNow(RefreshTrigger.AUTO)
     }
 
-    private suspend fun handleRefreshSuccess(snapshot: ZontSnapshot): RefreshOutcome {
+    private suspend fun handleRefreshSuccess(
+        snapshot: ZontSnapshot,
+        settings: ZontSettings,
+        trigger: RefreshTrigger,
+    ): RefreshOutcome {
         val nowEpochSeconds = System.currentTimeMillis() / 1_000L
         val cleanSnapshot = snapshot.copy(isStale = false, errorMessage = null)
         val snapshotForPhone = runCatching {
-            dataLayerSync.pushSnapshot(cleanSnapshot)
+            dataLayerSync.pushSnapshot(
+                snapshot = cleanSnapshot,
+                urgent = dataLayerSyncShouldBeUrgent(trigger),
+            )
             cleanSnapshot
         }.getOrElse { syncError ->
             cleanSnapshot.copy(errorMessage = "Phone refresh succeeded, but watch sync failed: ${syncError.message}")
@@ -116,7 +132,46 @@ class ZontSnapshotRepository(
             snapshot = snapshotForPhone,
             lastSuccessfulRefreshEpochSeconds = nowEpochSeconds,
         )
+        applyScheduleMode(scheduleModeAfterSuccess(trigger), settings)
         return RefreshOutcome.Success(snapshotForPhone)
+    }
+
+    private suspend fun handleRefreshFailure(
+        previousSnapshot: ZontSnapshot?,
+        settings: ZontSettings,
+        trigger: RefreshTrigger,
+        failure: ApiRefreshResult.Failure,
+    ): RefreshOutcome {
+        val policy = failurePolicy(trigger, failure.kind)
+        val persistedMessage = if (policy.autoRefreshPaused) {
+            "${failure.message} Auto-refresh is paused until settings are updated or a manual refresh succeeds."
+        } else {
+            failure.message
+        }
+
+        preferencesStore.saveFailure(
+            previousSnapshot = previousSnapshot,
+            settings = settings,
+            errorMessage = persistedMessage,
+            autoRefreshPaused = policy.autoRefreshPaused,
+        )
+        applyScheduleMode(policy.scheduleMode, settings)
+        return RefreshOutcome.Failure(
+            message = persistedMessage,
+            shouldRetry = policy.shouldRetryWorker,
+        )
+    }
+
+    private fun applyScheduleMode(
+        mode: AutoRefreshScheduleMode,
+        settings: ZontSettings,
+    ) {
+        when (mode) {
+            AutoRefreshScheduleMode.NONE -> Unit
+            AutoRefreshScheduleMode.RESET_DELAY -> autoRefreshScheduler.scheduleFromSettings(settings)
+            AutoRefreshScheduleMode.APPEND_AFTER_CURRENT -> autoRefreshScheduler.scheduleNextAfterWorker(settings)
+            AutoRefreshScheduleMode.CANCEL -> autoRefreshScheduler.cancel()
+        }
     }
 
     private fun selectDeviceId(
@@ -160,7 +215,10 @@ class ZontSnapshotRepository(
 
 sealed interface RefreshOutcome {
     data class Success(val snapshot: ZontSnapshot) : RefreshOutcome
-    data class Failure(val message: String) : RefreshOutcome
+    data class Failure(
+        val message: String,
+        val shouldRetry: Boolean = false,
+    ) : RefreshOutcome
 }
 
 sealed interface AuthOutcome {

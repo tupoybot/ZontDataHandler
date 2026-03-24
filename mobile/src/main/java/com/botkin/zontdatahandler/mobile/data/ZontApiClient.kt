@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
@@ -38,7 +39,12 @@ class ZontApiClient {
             parseSnapshot(body = body, settings = settings, previousSnapshot = previousSnapshot)
         }.fold(
             onSuccess = { ApiRefreshResult.Success(it) },
-            onFailure = { ApiRefreshResult.Failure(it.message ?: "Unknown refresh error") },
+            onFailure = { error ->
+                ApiRefreshResult.Failure(
+                    message = error.message ?: "Unknown refresh error",
+                    kind = error.toRefreshFailureKind(),
+                )
+            },
         )
     }
 
@@ -79,11 +85,19 @@ class ZontApiClient {
             val responseBody = connection.readBody()
             if (responseCode !in 200..299) {
                 if (responseCode == HttpURLConnection.HTTP_FORBIDDEN) {
-                    throw IllegalStateException(
+                    throw PermanentRefreshException(
                         "ZONT rejected the current token (HTTP 403). Request a new token or enter another X-ZONT-Token.",
                     )
                 }
-                throw IllegalStateException("ZONT HTTP $responseCode: ${responseBody.take(300)}")
+                if (responseCode == HttpURLConnection.HTTP_CLIENT_TIMEOUT ||
+                    responseCode == HttpURLConnection.HTTP_UNAVAILABLE ||
+                    responseCode == HttpURLConnection.HTTP_GATEWAY_TIMEOUT ||
+                    responseCode == 429 ||
+                    responseCode in 500..599
+                ) {
+                    throw TransientRefreshException("ZONT HTTP $responseCode: ${responseBody.take(300)}")
+                }
+                throw PermanentRefreshException("ZONT HTTP $responseCode: ${responseBody.take(300)}")
             }
             return responseBody
         } finally {
@@ -124,7 +138,7 @@ class ZontApiClient {
     private fun parseAuthToken(body: String): String {
         val root = JSONObject(body)
         if (!root.optBoolean("ok", false)) {
-            throw IllegalStateException(readApiError(root))
+            throw PermanentRefreshException(readApiError(root))
         }
 
         return root.optString("token").trim().ifBlank {
@@ -135,7 +149,7 @@ class ZontApiClient {
     private fun parseAvailableDevices(body: String): List<AvailableDevice> {
         val root = JSONObject(body)
         if (!root.optBoolean("ok", false)) {
-            throw IllegalStateException(readApiError(root))
+            throw PermanentRefreshException(readApiError(root))
         }
 
         val devices = root.optJSONArray("devices")
@@ -164,13 +178,13 @@ class ZontApiClient {
     ): ZontSnapshot {
         val root = JSONObject(body)
         if (!root.optBoolean("ok", false)) {
-            throw IllegalStateException(readApiError(root))
+            throw PermanentRefreshException(readApiError(root))
         }
 
         val devices = root.optJSONArray("devices")
-            ?: throw IllegalStateException("ZONT response does not contain devices[]")
+            ?: throw PermanentRefreshException("ZONT response does not contain devices[]")
         val device = devices.findDevice(settings.deviceId)
-            ?: throw IllegalStateException("device_id ${settings.deviceId} was not found in devices[]")
+            ?: throw PermanentRefreshException("device_id ${settings.deviceId} was not found in devices[]")
 
         val z3kState = device.optJSONObject("io")?.optJSONObject("z3k-state")
         if (z3kState != null) {
@@ -503,7 +517,10 @@ class ZontApiClient {
 
 sealed interface ApiRefreshResult {
     data class Success(val snapshot: ZontSnapshot) : ApiRefreshResult
-    data class Failure(val message: String) : ApiRefreshResult
+    data class Failure(
+        val message: String,
+        val kind: RefreshFailureKind,
+    ) : ApiRefreshResult
 }
 
 sealed interface AuthTokenResult {
@@ -520,3 +537,20 @@ data class AvailableDevice(
     val deviceId: String,
     val name: String?,
 )
+
+private class PermanentRefreshException(
+    message: String,
+) : IllegalStateException(message)
+
+private class TransientRefreshException(
+    message: String,
+) : IOException(message)
+
+private fun Throwable.toRefreshFailureKind(): RefreshFailureKind {
+    return when (this) {
+        is PermanentRefreshException -> RefreshFailureKind.PERMANENT
+        is TransientRefreshException -> RefreshFailureKind.TRANSIENT
+        is IOException -> RefreshFailureKind.TRANSIENT
+        else -> RefreshFailureKind.PERMANENT
+    }
+}

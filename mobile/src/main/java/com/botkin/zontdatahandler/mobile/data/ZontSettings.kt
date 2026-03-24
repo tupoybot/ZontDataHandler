@@ -27,4 +27,5 @@ data class StoredMobileState(
     val settings: ZontSettings = ZontSettings(),
     val snapshot: com.botkin.zontdatahandler.shared.ZontSnapshot? = null,
     val lastSuccessfulRefreshEpochSeconds: Long? = null,
+    val autoRefreshPaused: Boolean = false,
 )

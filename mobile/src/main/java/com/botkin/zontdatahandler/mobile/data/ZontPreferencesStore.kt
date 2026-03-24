@@ -3,6 +3,7 @@ package com.botkin.zontdatahandler.mobile.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -31,6 +32,7 @@ class ZontPreferencesStore(
             ).sanitized(),
             snapshot = SnapshotJson.decodeOrNull(preferences[Keys.snapshotJson]),
             lastSuccessfulRefreshEpochSeconds = preferences[Keys.lastSuccessfulRefreshEpochSeconds],
+            autoRefreshPaused = preferences[Keys.autoRefreshPaused] ?: false,
         )
     }
 
@@ -44,6 +46,7 @@ class ZontPreferencesStore(
             preferences[Keys.deviceId] = sanitized.deviceId
             preferences[Keys.zone] = sanitized.zone
             preferences[Keys.refreshIntervalMinutes] = sanitized.refreshIntervalMinutes
+            preferences[Keys.autoRefreshPaused] = false
         }
     }
 
@@ -54,6 +57,7 @@ class ZontPreferencesStore(
         appContext.mobileDataStore.edit { preferences ->
             preferences[Keys.snapshotJson] = SnapshotJson.encode(snapshot)
             preferences[Keys.lastSuccessfulRefreshEpochSeconds] = lastSuccessfulRefreshEpochSeconds
+            preferences[Keys.autoRefreshPaused] = false
         }
     }
 
@@ -61,6 +65,7 @@ class ZontPreferencesStore(
         previousSnapshot: ZontSnapshot?,
         settings: ZontSettings,
         errorMessage: String,
+        autoRefreshPaused: Boolean,
     ) {
         val snapshotToPersist = (previousSnapshot ?: ZontSnapshot(
             deviceId = settings.deviceId.takeIf { it.isNotBlank() },
@@ -74,6 +79,7 @@ class ZontPreferencesStore(
         )
         appContext.mobileDataStore.edit { preferences ->
             preferences[Keys.snapshotJson] = SnapshotJson.encode(snapshotToPersist)
+            preferences[Keys.autoRefreshPaused] = autoRefreshPaused
         }
     }
 
@@ -85,5 +91,6 @@ class ZontPreferencesStore(
         val refreshIntervalMinutes = intPreferencesKey("refresh_interval_minutes")
         val snapshotJson = stringPreferencesKey("snapshot_json")
         val lastSuccessfulRefreshEpochSeconds = longPreferencesKey("last_successful_refresh_epoch_seconds")
+        val autoRefreshPaused = booleanPreferencesKey("auto_refresh_paused")
     }
 }

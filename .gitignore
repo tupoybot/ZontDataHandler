@@ -6,6 +6,7 @@
 *.keystore
 /keystore.properties
 /.env
+/.release-local/
 
 **/build/
 **/captures/

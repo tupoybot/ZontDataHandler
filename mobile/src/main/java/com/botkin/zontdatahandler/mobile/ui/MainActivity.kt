@@ -1,5 +1,9 @@
 package com.botkin.zontdatahandler.mobile.ui
 
+import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -83,6 +88,7 @@ private fun MainScreen(
     onSaveSettings: () -> Unit,
     onRefresh: () -> Unit,
 ) {
+    val context = LocalContext.current
     Scaffold { innerPadding ->
         Column(
             modifier = Modifier
@@ -97,9 +103,20 @@ private fun MainScreen(
                 style = MaterialTheme.typography.headlineSmall,
             )
             Text(
-                text = "Minimal MVP: local secrets, manual refresh, auto-refresh and latest snapshot sync to watch.",
+                text = "Phone build: ${installedBuildLabel(context)}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = "Local secrets, manual refresh, scheduled auto-refresh and latest snapshot sync to watch.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            if (uiState.isAutoRefreshPaused) {
+                Text(
+                    text = "Auto-refresh is paused after a permanent refresh error. Save settings or run Refresh after fixing credentials or device selection.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
 
             SettingsCard(
                 uiState = uiState,
@@ -345,3 +362,22 @@ private fun currentEpochSeconds(): Long = System.currentTimeMillis() / 1_000L
 
 private val timestampFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+private fun installedBuildLabel(context: Context): String {
+    val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0L),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0)
+    }
+    val versionName = packageInfo.versionName ?: "--"
+    val buildType = if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+        "debug"
+    } else {
+        "release"
+    }
+    return "$versionName (${packageInfo.longVersionCode}) $buildType"
+}

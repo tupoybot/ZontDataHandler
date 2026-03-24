@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Этап 7 задокументирован как косметический follow-up: обновление `LONG_TEXT` layout для paired complications и отдельная проверка typography `ZONT burner` перед возможной правкой размера шрифта.
+
+## 0.2 - 2026-03-24
+
+- Автообновление на телефоне теперь различает transient и permanent refresh failures: transient background ошибки уходят в `WorkManager` retry/backoff, а постоянные проблемы уровня токена / `device_id` ставят auto-refresh на паузу вместо бесконечного тихого reschedule.
+- `ZONT overview + icons` теперь входит в явный watch-side `ComplicationUpdater.requestAll()`, поэтому image-provider не остаётся случайно устаревшим после очередного phone -> watch sync.
+- Телефон и часы теперь показывают установленный version/build прямо в статусных экранах, чтобы sideload и install/upgrade path можно было проверить без догадок.
+- Release signing можно задать через gitignored `keystore.properties` или env vars; README и GitHub Actions теперь честно различают signed release APK и unsigned промежуточный output.
+- Добавлен локальный генератор release signing materials и GitHub Actions теперь умеет восстанавливать keystore из repository secrets без хранения приватных ключей в git.
 - `ZONT overview + icons` теперь публикуется только для image-compatible слотов, чтобы не деградировать в text-only fallback на части watch face.
 - Обычные большие `LONG_TEXT`-слоты, включая нижний большой слот на совместимых watch face, теперь можно использовать не только для `ZONT overview`, но и для `ZONT setpoint + coolant` / `ZONT room + air setpoint`.
 - В документации отдельно разведены обычные большие слоты с системным picker'ом и private Samsung slots уровня `Ultra Analog`.
@@ -23,4 +32,4 @@
 
 - Специальные Samsung Ultra-style slots могут оставаться недоступными для сторонних providers даже при наличии `RANGED_VALUE`; это вынесено в backlog этапа 5.
 - Для `overview + icons` итоговое поведение всё ещё зависит от конкретного watch face и типа slot; подробная практическая проверка вынесена в этап 5.
-- Release APK прикладываются к GitHub Release как assets, но без приватной signing-инфраструктуры они остаются unsigned release outputs.
+- Без локального keystore или GitHub Actions signing secrets release build по-прежнему остаётся честным unsigned промежуточным output.
